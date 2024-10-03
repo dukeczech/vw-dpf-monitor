@@ -1,3 +1,7 @@
+#include "config.h"
+
+#if BUILD_ENV_NAME == lilygo_t_display_s3
+
 #include "bluetooth.h"
 
 SerialStatusCallback::~SerialStatusCallback() {};
@@ -237,3 +241,4 @@ size_t BTAdapter::write(uint8_t data) {
     }
     return 0;
 }
+#endif

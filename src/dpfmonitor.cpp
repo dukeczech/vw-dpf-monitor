@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <LittleFS.h>
+#include <FS.h>
 #include <float.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -56,40 +58,41 @@ class IconStatusCallback : public BLEStatusCallback {
    public:
     IconStatusCallback() {
         m_connected = false;
-        m_channelactive = false;
     }
 
     virtual ~IconStatusCallback() override {}
 
     bool IsConnected() { return m_connected; }
-    bool IsChannelActive() { return m_channelactive; }
 
     virtual void onConnected() override {
         m_connected = true;
-        // Bad idea to handle display from the other thread
-        // btIcon.enable().display();
+
+        Display::lock();
+        btIcon.enable().display();
+        Display::unlock();
     }
 
     virtual void onDisconnected() override {
         m_connected = false;
-        // Bad idea to handle display from the other thread
-        // btIcon.disable().display();
+
+        Display::lock();
+        btIcon.disable().display();
+
+        // Turn off the receice status
+        commIcon.disable().display();
+        Display::unlock();
     }
 
     virtual void onTransmit() override {
-        // Bad idea to handle display from the other thread?
         Display::lock();
         commIcon.enable().display();
         Display::unlock();
-        m_channelactive = true;
     }
 
     virtual void onReceive() override {
-        // Bad idea to handle display from the other thread?
         Display::lock();
         commIcon.disable().display();
         Display::unlock();
-        m_channelactive = false;
     }
 
    protected:
@@ -101,6 +104,8 @@ IconStatusCallback callback;
 
 void initGUI() {
     // Init the GUI
+    Display::lock();
+
     sb.setText("DPF indicator", 120);
 
     btIcon.setPosition(5, 3);
@@ -137,6 +142,10 @@ void initGUI() {
     cc6.setSize(cc3a.getWidth(), 25).setPosition(cc3a.getX(), ycelltop).setBorder(0);
     cc6.setValue(new TextLabel("(+0.0", "km)", 2)).getValue()->setPadding(-5, 0).setColor(0xafe6);
 #endif
+
+    btIcon.disable().display();
+    commIcon.disable().display();
+    Display::unlock();
 }
 
 void displayGUI() {
@@ -145,7 +154,7 @@ void displayGUI() {
     Display::lock();
     if (testMode) {
         pb.setProgress((double)rnd).display(true);
-        dpfIcon.setTemperature(((double)rnd) * 6.5) /*.display()*/;
+        dpfIcon.setTemperature(((double)rnd) * 6.5);
     }
 
     sb.display();
@@ -169,6 +178,46 @@ void displayGUI() {
     Display::unlock();
 }
 
+bool connect() {
+#if BUILD_ENV_NAME == lilygo_t_display_s3
+    // Try the connection to be opened
+    if (serialBT.IsConnected()) return true;
+
+    (testMode) ? serialBT.Scan(2) : serialBT.Scan();
+
+    serialBT.Loop();
+
+    channel = &serialBT;
+
+    if (serialBT.IsConnected()) {
+        Serial.println(F("Bluetooth channel is opened"));
+#endif
+        if (!myELM327.begin(*channel, false, 2000)) {
+            Serial.println(F("ELM327 begin failed"));
+
+#if BUILD_ENV_NAME == lolin32_lite
+            display.setCursor(0, 10);
+            display.println(F("ELM327 begin failed"));
+            display.display();
+
+            while (true) {
+            };
+#endif
+            return false;
+        } else {
+            Serial.println(F("ELM327 is connected"));
+        }
+
+        OBD::init();
+        Serial.println(F("OBD init OK"));
+
+        return true;
+#if BUILD_ENV_NAME == lilygo_t_display_s3
+    }
+#endif
+    return false;
+}
+
 void setup() {
     Serial.begin(115200);
 
@@ -176,10 +225,6 @@ void setup() {
     delay(2000);
 
     Serial.println(F("DPF indicator setup start"));
-
-    Sound::beep3long();
-    delay(1000);
-    Sound::beep1long();
 
     // Init measurements
     Measurements::init();
@@ -260,33 +305,15 @@ void setup() {
 
     if (Buttons::IsPressedDown()) {
         testMode = true;
+
+        Measurements::startTest();
+
         // Simulate the measure every second
         measureAction = Every(1000);
         Serial.println(F("Test mode is enabled"));
     }
 
     Display::init();
-
-#if 0
-    gfx.setFont(Fonts::getFont(5));
-    const uint8_t hf = Fonts::getHeight(5);
-    int16_t x = 0, y = 0;
-    uint16_t th = 0, tw = 0;
-
-    gfx.getTextBounds("|g", 20, 50, &x, &y, &tw, &th);
-    Serial.printf("g: %d %d %d %d %d\n", x, y, tw, th, hf);
-    gfx.fillRect(x, y, tw, hf, RED);
-    gfx.setCursor(20, 50);
-    gfx.printf("|g");
-
-    gfx.getTextBounds("0", 80, 50, &x, &y, &tw, &th);
-    Serial.printf("0: %d %d %d %d %d\n", x, y, tw, th, hf);
-    gfx.fillRect(x, y, tw, hf, GREEN);
-    gfx.setCursor(80, 50);
-    gfx.printf("0");
-
-    //delay(20000);
-#endif
 
 #if SIMPLE_GUI == 1
     gfx.setCursor(0, 0);
@@ -308,37 +335,9 @@ void setup() {
     serialBT.Init();
 
     Serial.println(F("Bluetooth init end"));
-
-    // Try the connection to be opened
-    while (!serialBT.IsConnected()) {
-        (testMode) ? serialBT.Scan(2) : serialBT.Scan();
-
-        serialBT.Loop();
-        if (testMode) {
-            break;
-        }
-    }
-    Serial.println(F("Bluetooth channel is opened"));
-
-    channel = &serialBT;
 #endif
 
-    if (!myELM327.begin(*channel, false, 2000)) {
-        Serial.println(F("ELM327 begin failed"));
-
-#if BUILD_ENV_NAME == lolin32_lite
-        display.setCursor(0, 10);
-        display.println(F("ELM327 begin failed"));
-        display.display();
-
-        while (true) {
-        };
-#endif
-    } else {
-        Serial.println(F("ELM327 is connected"));
-    }
-
-    OBD::init();
+    connect();
 
 #if BUILD_ENV_NAME == lolin32_lite
     display.setCursor(0, 10);
@@ -354,8 +353,8 @@ void setup() {
     gfx.println(F("Setup end..."));
 #endif
     // Call fill screen twice only works (wtf??)
-    gfx.fillScreen(BACKGROUND_COLOR);
-    gfx.fillScreen(BACKGROUND_COLOR);
+    gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
+    // gfx.fillScreen(BACKGROUND_COLOR);
 
     displayGUI();
 #endif
@@ -382,11 +381,6 @@ void idle() {
     if (statusAction()) {
         sb.display();
 
-        if (callback.IsConnected())
-            btIcon.enable().display();
-        else
-            btIcon.disable().display();
-
         if (Measurements::regeneration() || Buttons::IsPressedDown())
             if (statusAction.state)
                 fireIcon.enable().display();
@@ -404,17 +398,7 @@ void loop() {
     if (btAction()) {
         if (!serialBT.IsConnected() && !testMode) {
             // Reconnect
-            Serial.println(F("Bluetooth reconnect needed"));
-
-            serialBT.Scan();
-
-            serialBT.Loop();
-
-            if (serialBT.IsConnected()) {
-                Serial.println(F("Bluetooth channel is opened"));
-
-                // Refresh the GUI (weird characters sometimes appears)
-                // gfx.fillScreen(BACKGROUND_COLOR);
+            if (connect()) {
                 displayGUI();
             }
         }
@@ -500,7 +484,7 @@ void loop() {
             if (cc2.getValue() != NULL) ((TextLabel*)cc2.getValue())->setText(String(Measurements::getValue(SOOT_MASS_CALCULATED), 2));
 
             const double val = Measurements::diff(SOOT_MASS_CALCULATED);
-            if (val > 0.0) {
+            if (val >= 0.0) {
                 if (cc5.getValue() != NULL) ((TextLabel*)cc5.getValue())->setText("(+" + String(val, 2));
             } else {
                 if (cc5.getValue() != NULL) ((TextLabel*)cc5.getValue())->setText("(" + String(val, 2));
@@ -510,7 +494,7 @@ void loop() {
             if (cc3a.getValue() != NULL) ((TextLabel*)cc3a.getValue())->setText(String(Measurements::getValue(DISTANCE_SINCE_LAST_REGENERATION), 1));
 
             const double val = Measurements::diff(DISTANCE_SINCE_LAST_REGENERATION);
-            if (val > 0.0) {
+            if (val >= 0.0) {
                 if (cc6.getValue() != NULL) ((TextLabel*)cc6.getValue())->setText("(+" + String(val, 1));
             } else {
                 if (cc6.getValue() != NULL) ((TextLabel*)cc6.getValue())->setText("(" + String(val, 1));

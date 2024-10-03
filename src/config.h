@@ -28,7 +28,7 @@
 #define I2C_SDA 15
 #define I2C_SCL 13
 
-extern Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+extern Adafruit_SSD1306 display;
 extern BluetoothSerial serialBT;
 #endif
 

@@ -63,7 +63,6 @@ void Measurements::setValue(const parameter_id id, const double value) {
 
 bool Measurements::measure(measurement_t& measurement, const bool randomData) {
     if (measurement.enabled) {
-        Serial.printf("test: %d\n", m_testmode);
         if (m_testmode) {
             static double MASS[] = {19.0, 20.31, 21.87, 22.66, 23.82, 24.08, 23.28, 21.74, 20.33, 18.47, 11.33, 5.3};
             static double TEMP[] = {278.6, 299.1, 380.47, 402.66, 453.12, 527.1, 512.3, 500.0, 499.3, 480.3, 402.2, 320.3};
@@ -146,19 +145,26 @@ bool Measurements::regeneration() {
     if (m_regeneration) {
         // Try to guess the regeneration process end
         // Turns out that regeneration stopped when the regeneration duration is zero
-        if (getValue(REGENERATION_DURATION) == 0.0) {
+        if (getValue(REGENERATION_DURATION) == 0.0 && !m_testmode) {
             Sound::beep1long();
             m_regeneration = false;
+
+            // Use the new start values
+            Measurements::copy();
         }
 
         if (getValue(DPF_INPUT_TEMPERATURE) < 380.0 && (getValue(POST_INJECTION_2) + getValue(POST_INJECTION_3) == 0.0)) {
             Sound::beep1long();
             m_regeneration = false;
+
+            // Use the new start values
+            Measurements::copy();
         }
     } else {
         // Try to guess the regeneration process start
         // Turns out that regeneration started when the regeneration duration is positive
-        if (getValue(REGENERATION_DURATION) > 0.0) {
+        if (getValue(REGENERATION_DURATION) > 0.0 && !m_testmode) {
+            // In the test mode this causes the regeneration starts immediatelly
             Sound::beep3long();
             m_regeneration = true;
         }

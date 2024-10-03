@@ -1,6 +1,4 @@
 #include <Arduino.h>
-#include <LittleFS.h>
-#include <FS.h>
 #include <float.h>
 #include <stdint.h>
 #include <stdlib.h>

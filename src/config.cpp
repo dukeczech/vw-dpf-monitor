@@ -1,5 +1,7 @@
 #include "config.h"
 
+bool testMode = false;
+
 #if BUILD_ENV_NAME == lolin32_lite
 // Use specific code for Lolin-32 lite
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);

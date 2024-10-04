@@ -19,12 +19,12 @@
 #include "gui/sound.h"
 #include "measurement.h"
 #include "obd.h"
+#include "storage.h"
 
 // Interesting page https://github.com/blizniukp/WIFI_kit_32_dpf/tree/main
 // https://github.com/jazdw/vag-blocks
 // 067,3,Pressure Differential,DPF,Specification (Idle/Clean DPF): 3.0...7.0 mbar\nSpecification (Partitally clean DPF): 30.0...70.0 mbar\nSpecification (Fully Loaded DPF): max. 300.0 mbar
 
-bool testMode = false;
 Stream* channel = NULL;
 Every measureAction(5000);
 Every btAction(1000);
@@ -159,7 +159,7 @@ void displayGUI() {
     cc1.display();
     cc2.display();
 
-    if (Measurements::regeneration() || Buttons::IsPressedDown()) {
+    if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
         cc3b.display(true);
         cc6.disable();
     } else {
@@ -223,6 +223,20 @@ void setup() {
     delay(2000);
 
     Serial.println(F("DPF indicator setup start"));
+
+    // Init the buttons
+    Buttons::init();
+
+    if (Buttons::isPressedDown()) {
+        testMode = true;
+
+        // Simulate the measure every second
+        measureAction = Every(1000);
+        Serial.println(F("Test mode is enabled"));
+    }
+
+    // Storage init
+    Storage::init();
 
     // Init measurements
     Measurements::init();
@@ -299,17 +313,6 @@ void setup() {
     pinMode(GFX_BL, OUTPUT);
     digitalWrite(GFX_BL, HIGH);
 #endif
-    Buttons::Init();
-
-    if (Buttons::IsPressedDown()) {
-        testMode = true;
-
-        Measurements::startTest();
-
-        // Simulate the measure every second
-        measureAction = Every(1000);
-        Serial.println(F("Test mode is enabled"));
-    }
 
     Display::init();
 
@@ -352,7 +355,6 @@ void setup() {
 #endif
     // Call fill screen twice only works (wtf??)
     gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
-    // gfx.fillScreen(BACKGROUND_COLOR);
 
     displayGUI();
 #endif
@@ -379,7 +381,7 @@ void idle() {
     if (statusAction()) {
         sb.display();
 
-        if (Measurements::regeneration() || Buttons::IsPressedDown())
+        if (Regeneration::check() || Buttons::isPressedDown())
             if (statusAction.state)
                 fireIcon.enable().display();
             else
@@ -409,7 +411,6 @@ void loop() {
     // Iterate over measurements map every 5s
     bool measureOK = true;
     if (measureAction()) {
-        uint8_t line = 0;
         for (auto itr = Measurements::getActual().begin(); itr != Measurements::getActual().end(); ++itr) {
             if (itr->second.enabled) {
 #if BUILD_ENV_NAME == lilygo_t_display_s3
@@ -433,7 +434,32 @@ void loop() {
                 if (itr->first == SOOT_MASS_CALCULATED) {
                     Measurements::getValue(SOOT_LOAD) = min(Measurements::getValue(SOOT_MASS_CALCULATED) / 0.24, 100.0);
                 }
+            }
+        }
 
+        // Check the first run and assign the measurements at beginning
+        if (measureOK && Measurements::getStart().empty()) {
+            Measurements::copy();
+        }
+
+        // Simulate the regeneration start
+        if (Buttons::isPressedUp()) {
+            if (Regeneration::isRegenerating()) {
+                Measurements::setValue(REGENERATION_DURATION, 0.0);
+                Measurements::setValue(DPF_INPUT_TEMPERATURE, 250.0);
+                Measurements::setValue(POST_INJECTION_2, 0.0);
+                Measurements::setValue(POST_INJECTION_3, 0.0);
+            } else {
+                Measurements::setValue(REGENERATION_DURATION, 0.1);
+                Measurements::setValue(DPF_INPUT_TEMPERATURE, 400.0);
+            }
+        }
+
+        //  Display the measurement data
+        uint8_t line = 0;
+        Serial.println("------------------------------------------");
+        for (auto itr = Measurements::getActual().begin(); itr != Measurements::getActual().end(); ++itr) {
+            if (itr->second.enabled) {
                 Serial.printf("%s: %.*f %s\n", itr->second.caption, itr->second.precision, itr->second.value, itr->second.unit);
 #if SIMPLE_GUI == 1
                 displayLine(line, itr->second.shortCaption, itr->second.value, itr->second.precision, itr->second.unit);
@@ -451,26 +477,13 @@ void loop() {
 #endif
             }
         }
+        if (testMode) {
+            Serial.print(Measurements::toString());
+        }
         Serial.println("------------------------------------------");
 
-        // Check the first run and assign the measurements at beginning
-        if (measureOK && Measurements::getStart().empty()) {
-            Measurements::copy();
-        }
-
-        // Simulate the regeneration start
-        if (Buttons::IsPressedUp()) {
-            if (Measurements::regeneration()) {
-                Measurements::setValue(REGENERATION_DURATION, 0.0);
-                Measurements::setValue(DPF_INPUT_TEMPERATURE, 400.0);
-            } else {
-                Measurements::setValue(REGENERATION_DURATION, 0.1);
-                Measurements::setValue(DPF_INPUT_TEMPERATURE, 400.0);
-            }
-        }
-
         // Check the regeneration process
-        if (Measurements::regeneration()) {
+        if (Regeneration::check()) {
             // TODO
         }
 

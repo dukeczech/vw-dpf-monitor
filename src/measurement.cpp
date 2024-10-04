@@ -3,18 +3,19 @@
 #include <Arduino.h>
 #include <float.h>
 
+#include "config.h"
 #include "gui/sound.h"
 #include "obd.h"
+#include "storage.h"
 
 bool calculateEGRClosing(double* value, void* calcFunParam = NULL) {
     *value = 100.0 - *value;
     return true;
 }
 
+const String Measurements::MEASUREMENTS_LOG = "/measurements.log";
 std::map<parameter_id, measurement_t> Measurements::m_start;
 std::map<parameter_id, measurement_t> Measurements::m_actual;
-bool Measurements::m_regeneration = false;
-bool Measurements::m_testmode = false;
 
 void Measurements::init() {
     m_actual.insert({SOOT_MASS_MEASURED, (measurement_t){1, "Soot mass measured", "Soot mass(m)", 0x221ABE, 2, "g", 0.0, 2, -15.0, 30.0, NULL, 0.01, 0, NULL, true, true, NULL}});
@@ -31,6 +32,10 @@ void Measurements::init() {
     m_actual.insert({DIFFERENTIAL_PRESSURE, (measurement_t){11, "Differential pressure", "Diff. press", 0x2214F5, 2, "hPa", 0.0, 0, 0.0, 250.0, NULL, 1.0, 0, NULL, true, false, NULL}});
     m_actual.insert({DISTANCE_DRIVEN, (measurement_t){12, "Distance driven", "Distance", 0x2216A9, 4, "km", 0.0, 0, 0.0, 400000.0, NULL, 1.0, 0, NULL, true, false, NULL}});
     m_actual.insert({LOW_PRESSURE_EGR_CLOSING, (measurement_t){13, "Low press. EGR closing", "EGR", 0x2217F4, 2, "%", 0.0, 0, -100.0, 100.0, &calculateEGRClosing, 1 / 81.92, 0, NULL, true, false, NULL}});
+
+    if (testMode) {
+        Storage::remove(MEASUREMENTS_LOG);
+    }
 }
 
 void Measurements::copy() {
@@ -49,12 +54,20 @@ const bool Measurements::isEnabled(const parameter_id id) {
     return m_actual[id].enabled;
 }
 
+String Measurements::getCaption(const parameter_id id) {
+    return String(m_actual[id].caption);
+}
+
 double& Measurements::getValue(const parameter_id id) {
     return m_actual[id].value;
 }
 
 String Measurements::getUnit(const parameter_id id) {
-    return m_actual[id].unit;
+    return String(m_actual[id].unit);
+}
+
+uint8_t Measurements::getPrecision(const parameter_id id) {
+    return m_actual[id].precision;
 }
 
 void Measurements::setValue(const parameter_id id, const double value) {
@@ -63,29 +76,6 @@ void Measurements::setValue(const parameter_id id, const double value) {
 
 bool Measurements::measure(measurement_t& measurement, const bool randomData) {
     if (measurement.enabled) {
-        if (m_testmode) {
-            static double MASS[] = {19.0, 20.31, 21.87, 22.66, 23.82, 24.08, 23.28, 21.74, 20.33, 18.47, 11.33, 5.3};
-            static double TEMP[] = {278.6, 299.1, 380.47, 402.66, 453.12, 527.1, 512.3, 500.0, 499.3, 480.3, 402.2, 320.3};
-            static double INJECTION2[] = {0.0, 2.42, 2.42, 6.6, 4.53, 5.27, 5.3, 0.0, 6.6, 22.4, 0.0, 0.0};
-            static uint8_t i = 0;
-
-            if (measurement.id == SOOT_MASS_CALCULATED) {
-                measurement.value = MASS[i];
-                return true;
-            } else if (measurement.id == DPF_INPUT_TEMPERATURE) {
-                measurement.value = TEMP[i];
-                return true;
-            } else if (measurement.id == POST_INJECTION_2) {
-                measurement.value = INJECTION2[i];
-                if (i >= sizeof(MASS) - 1)
-                    i = 0;
-                else
-                    i++;
-
-                return true;
-            }
-        }
-
         if (randomData) {
             // Just simulate a real data
             delay(50);
@@ -131,7 +121,65 @@ float Measurements::diff(const parameter_id id) {
     return m_actual[id].value - m_start[id].value;
 }
 
-bool Measurements::regeneration() {
+void Measurements::log() {
+    // Log the measurements to the file
+    if (!Storage::exists(MEASUREMENTS_LOG)) {
+        // Create a log file header
+        String header;
+        header += getCaption(DISTANCE_DRIVEN) + " (" + getUnit(DISTANCE_DRIVEN) + ")\t";
+        header += getCaption(SOOT_MASS_CALCULATED) + " (" + getUnit(SOOT_MASS_CALCULATED) + ")\t";
+        header += getCaption(REGENERATION_DURATION) + " (" + getUnit(REGENERATION_DURATION) + ")\t";
+        header += getCaption(DISTANCE_SINCE_LAST_REGENERATION) + " (" + getUnit(DISTANCE_SINCE_LAST_REGENERATION) + ")\t";
+        header += getCaption(TIME_SINCE_LAST_REGENERATION) + " (" + getUnit(TIME_SINCE_LAST_REGENERATION) + ")\t";
+        header += getCaption(OIL_ASH_RESIDUE) + " (" + getUnit(OIL_ASH_RESIDUE) + ")\t";
+        header += getCaption(LOW_PRESSURE_EGR_CLOSING) + " (" + getUnit(LOW_PRESSURE_EGR_CLOSING) + ")\t";
+        header += getCaption(DPF_INPUT_TEMPERATURE) + " (" + getUnit(DPF_INPUT_TEMPERATURE) + ")\t";
+        header += getCaption(DPF_OUTPUT_TEMPERATURE) + " (" + getUnit(DPF_OUTPUT_TEMPERATURE) + ")\t";
+        header += getCaption(SOOT_MASS_MEASURED) + " (" + getUnit(SOOT_MASS_MEASURED) + ")\t";
+        header += getCaption(POST_INJECTION_2) + " (" + getUnit(POST_INJECTION_2) + ")\t";
+        header += getCaption(POST_INJECTION_3) + " (" + getUnit(POST_INJECTION_3) + ")\t";
+        header += getCaption(DIFFERENTIAL_PRESSURE) + " (" + getUnit(DIFFERENTIAL_PRESSURE) + ")";
+        header += "\n";
+
+        // Write the header
+        Storage::write(MEASUREMENTS_LOG, header);
+    }
+
+    // Write the measurements
+    Storage::append(MEASUREMENTS_LOG, Measurements::toString());
+
+    Serial.printf("Regeneration started, measurements: %d\n", Storage::countLines(MEASUREMENTS_LOG));
+    Serial.printf("%s\n", Storage::read(MEASUREMENTS_LOG));
+}
+
+String Measurements::toString() {
+    String output;
+
+    output += String(getValue(DISTANCE_DRIVEN), (unsigned int)getPrecision(DISTANCE_DRIVEN)) + "\t";
+    output += String(getValue(SOOT_MASS_CALCULATED), (unsigned int)getPrecision(SOOT_MASS_CALCULATED)) + "\t";
+    output += String(getValue(REGENERATION_DURATION), (unsigned int)getPrecision(REGENERATION_DURATION)) + "\t";
+    output += String(getValue(DISTANCE_SINCE_LAST_REGENERATION), (unsigned int)getPrecision(DISTANCE_SINCE_LAST_REGENERATION)) + "\t";
+    output += String(getValue(TIME_SINCE_LAST_REGENERATION), (unsigned int)getPrecision(TIME_SINCE_LAST_REGENERATION)) + "\t";
+    output += String(getValue(OIL_ASH_RESIDUE), (unsigned int)getPrecision(OIL_ASH_RESIDUE)) + "\t";
+    output += String(getValue(LOW_PRESSURE_EGR_CLOSING), (unsigned int)getPrecision(LOW_PRESSURE_EGR_CLOSING)) + "\t";
+    output += String(getValue(DPF_INPUT_TEMPERATURE), (unsigned int)getPrecision(DPF_INPUT_TEMPERATURE)) + "\t";
+    output += String(getValue(DPF_OUTPUT_TEMPERATURE), (unsigned int)getPrecision(DPF_OUTPUT_TEMPERATURE)) + "\t";
+    output += String(getValue(SOOT_MASS_MEASURED), (unsigned int)getPrecision(SOOT_MASS_MEASURED)) + "\t";
+    output += String(getValue(POST_INJECTION_2), (unsigned int)getPrecision(POST_INJECTION_2)) + "\t";
+    output += String(getValue(POST_INJECTION_3), (unsigned int)getPrecision(POST_INJECTION_3)) + "\t";
+    output += String(getValue(DIFFERENTIAL_PRESSURE), (unsigned int)getPrecision(DIFFERENTIAL_PRESSURE));
+    output += "\n";
+
+    return output;
+}
+
+bool Regeneration::m_regeneration = false;
+
+bool Regeneration::isRegenerating() {
+    return m_regeneration;
+}
+
+bool Regeneration::check() {
     // How to check the regeneration start?
     // Mass calculated > 24g
     // Mass calculated decreases
@@ -145,44 +193,47 @@ bool Measurements::regeneration() {
     if (m_regeneration) {
         // Try to guess the regeneration process end
         // Turns out that regeneration stopped when the regeneration duration is zero
-        if (getValue(REGENERATION_DURATION) == 0.0 && !m_testmode) {
-            Sound::beep1long();
+        if (Measurements::getValue(REGENERATION_DURATION) == 0.0 && !testMode) {
             m_regeneration = false;
-
-            // Use the new start values
-            Measurements::copy();
+            Regeneration::onRegenerationEnd();
         }
 
-        if (getValue(DPF_INPUT_TEMPERATURE) < 380.0 && (getValue(POST_INJECTION_2) + getValue(POST_INJECTION_3) == 0.0)) {
-            Sound::beep1long();
+        if (Measurements::getValue(DPF_INPUT_TEMPERATURE) < 380.0 &&
+            (Measurements::getValue(POST_INJECTION_2) + Measurements::getValue(POST_INJECTION_3) == 0.0)) {
             m_regeneration = false;
-
-            // Use the new start values
-            Measurements::copy();
+            Regeneration::onRegenerationEnd();
         }
     } else {
         // Try to guess the regeneration process start
         // Turns out that regeneration started when the regeneration duration is positive
-        if (getValue(REGENERATION_DURATION) > 0.0 && !m_testmode) {
+        if (Measurements::getValue(REGENERATION_DURATION) > 0.0 && !testMode) {
             // In the test mode this causes the regeneration starts immediatelly
-            Sound::beep3long();
             m_regeneration = true;
+            Regeneration::onRegenerationStart();
         }
 
-        if (getValue(SOOT_MASS_CALCULATED) > 24.0 && getValue(DPF_INPUT_TEMPERATURE) >= 380.0 &&
-            (getValue(POST_INJECTION_2) + getValue(POST_INJECTION_3) > 0.0)) {
-            Sound::beep3long();
+        if (Measurements::getValue(SOOT_MASS_CALCULATED) > 24.0 && Measurements::getValue(DPF_INPUT_TEMPERATURE) >= 380.0 &&
+            (Measurements::getValue(POST_INJECTION_2) + Measurements::getValue(POST_INJECTION_3) > 0.0)) {
             m_regeneration = true;
+            Regeneration::onRegenerationStart();
         }
     }
 
     return m_regeneration;
 }
 
-void Measurements::startTest() {
-    m_testmode = true;
+void Regeneration::onRegenerationStart() {
+    Sound::beep3long();
+
+    // Log the regeneration start values
+    Measurements::log();
 }
 
-void Measurements::stopTest() {
-    m_testmode = false;
+void Regeneration::onRegenerationEnd() {
+    Sound::beep1long();
+
+    // Use the new start values
+    Measurements::copy();
+
+    Serial.println(F("Regeneration ended"));
 }

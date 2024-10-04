@@ -5,8 +5,8 @@ class Buttons {
     static uint8_t BUTTON_UP;
     static uint8_t BUTTON_DOWN;
 
-    static void Init();
+    static void init();
 
-    static bool IsPressedUp();
-    static bool IsPressedDown();
+    static bool isPressedUp();
+    static bool isPressedDown();
 };

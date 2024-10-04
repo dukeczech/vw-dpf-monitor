@@ -55,21 +55,35 @@ class Measurements {
     static std::map<parameter_id, measurement_t>& getStart();
 
     static const bool isEnabled(const parameter_id id);
+    static String getCaption(const parameter_id id);
     static double& getValue(const parameter_id id);
     static String getUnit(const parameter_id id);
+    static uint8_t getPrecision(const parameter_id id);
 
     static void setValue(const parameter_id id, const double value);
 
     static bool measure(measurement_t& measurement, const bool randomData = false);
     static float diff(const parameter_id id);
 
-    static bool regeneration();
-    static void startTest();
-    static void stopTest();
+    static void log();
+
+    static String toString();
 
    protected:
+    static const String MEASUREMENTS_LOG;
     static std::map<parameter_id, measurement_t> m_start;
     static std::map<parameter_id, measurement_t> m_actual;
-    static bool m_regeneration;
     static bool m_testmode;
+};
+
+class Regeneration {
+   public:
+    static bool isRegenerating();
+    static bool check();
+
+    static void onRegenerationStart();
+    static void onRegenerationEnd();
+
+   protected:
+    static bool m_regeneration;
 };

@@ -9,6 +9,8 @@
 
 #define BACKGROUND_COLOR DARKCYAN
 
+extern bool testMode;
+
 #if BUILD_ENV_NAME == lolin32_lite
 // Use specific code for Lolin-32 lite
 

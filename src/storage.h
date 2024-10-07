@@ -11,6 +11,7 @@ class Storage {
     static bool exists(const String& path);
     static bool remove(const String& path);
     static String read(const String& path);
+    static String readLine(const String& path);
     static bool write(const String& path, const String& data);
     static bool append(const String& path, const String& data);
 

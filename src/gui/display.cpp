@@ -32,3 +32,19 @@ void Display::lock() {
 void Display::unlock() {
     taskEXIT_CRITICAL(&Display::m_mutex);
 }
+
+void Display::welcome() {
+#if SIMPLE_GUI == 1
+    gfx.setCursor(0, 0);
+    gfx.println(F("Setup start..."));
+#else
+    gfx.setFont(Fonts::getFont(3));
+    gfx.setCursor(10, gfx.height() / 2 + 10);
+    gfx.println(F("DPF indicator is starting"));
+    if (testMode) {
+        gfx.setCursor(90, gfx.height() / 2 + 30);
+        gfx.println(F("(test mode)"));
+    }
+    gfx.setFont(Fonts::getFont(1));
+#endif
+}

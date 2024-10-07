@@ -44,35 +44,41 @@ struct measurement_t {
     bool enabled;       /*Is measurement on?*/
     bool signedValue;
     void (*dataReadFunPtr)(float value); /*Function executed after reading the value*/
+
+    bool operator==(const measurement_t& other) const {
+        return id == other.id;
+    }
 };
 
 class Measurements {
    public:
+    static const String MEASUREMENTS_LOG;
+
     static void init();
-    static void copy();
 
     static std::map<parameter_id, measurement_t>& getActual();
     static std::map<parameter_id, measurement_t>& getStart();
+    static std::map<parameter_id, measurement_t>& getLast();
 
-    static const bool isEnabled(const parameter_id id);
-    static String getCaption(const parameter_id id);
-    static double& getValue(const parameter_id id);
-    static String getUnit(const parameter_id id);
-    static uint8_t getPrecision(const parameter_id id);
+    static const bool isEnabled(std::map<parameter_id, measurement_t>& measurement, const parameter_id id);
+    static String getCaption(std::map<parameter_id, measurement_t>& measurement, const parameter_id id);
+    static double& getValue(std::map<parameter_id, measurement_t>& measurement, const parameter_id id);
+    static String getUnit(std::map<parameter_id, measurement_t>& measurement, const parameter_id id);
+    static uint8_t getPrecision(std::map<parameter_id, measurement_t>& measurement, const parameter_id id);
 
-    static void setValue(const parameter_id id, const double value);
+    static void setValue(std::map<parameter_id, measurement_t>& measurement, const parameter_id id, const double value);
 
     static bool measure(measurement_t& measurement, const bool randomData = false);
     static float diff(const parameter_id id);
 
-    static void log();
+    static void log(std::map<parameter_id, measurement_t>& measurement);
 
-    static String toString();
+    static String toString(std::map<parameter_id, measurement_t>& measurement);
 
    protected:
-    static const String MEASUREMENTS_LOG;
     static std::map<parameter_id, measurement_t> m_start;
     static std::map<parameter_id, measurement_t> m_actual;
+    static std::map<parameter_id, measurement_t> m_last;
     static bool m_testmode;
 };
 

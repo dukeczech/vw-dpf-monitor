@@ -1,7 +1,7 @@
 #include <Arduino.h>
-#include <Arduino_GFX.h>
 #include <inttypes.h>
 
+#include "config.h"
 #include "bitmaps/icon_data.h"
 #include "fonts/NotoSansMono10pt7b.h"
 #include "fonts/NotoSansMono12pt7b.h"

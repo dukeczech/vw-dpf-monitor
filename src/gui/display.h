@@ -9,4 +9,6 @@ class Display {
     static bool init();
     static void lock();
     static void unlock();
+
+    static void welcome();
 };

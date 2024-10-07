@@ -1,6 +1,5 @@
 #include "graphic.h"
 
-#include <Arduino_GFX.h>
 #include <math.h>
 
 #include "bitmaps/arrows_icon.h"

@@ -19,12 +19,20 @@
 #include "gui/sound.h"
 #include "measurement.h"
 #include "obd.h"
+#include "server.h"
 #include "storage.h"
 
 // Interesting page https://github.com/blizniukp/WIFI_kit_32_dpf/tree/main
 // https://github.com/jazdw/vag-blocks
 // 067,3,Pressure Differential,DPF,Specification (Idle/Clean DPF): 3.0...7.0 mbar\nSpecification (Partitally clean DPF): 30.0...70.0 mbar\nSpecification (Fully Loaded DPF): max. 300.0 mbar
 
+enum eRunningState {
+    Init,
+    Measuring,
+    Idle
+};
+
+eRunningState state = Init;
 Stream* channel = NULL;
 Every measureAction(5000);
 Every btAction(1000);
@@ -147,32 +155,42 @@ void initGUI() {
 }
 
 void displayGUI() {
-    const long rnd = random(0, 100);
-
     Display::lock();
-    if (testMode) {
-        pb.setProgress((double)rnd).display(true);
-        dpfIcon.setTemperature(((double)rnd) * 6.5);
-    }
-
     sb.display();
-    cc1.display();
-    cc2.display();
 
-    if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
-        cc3b.display(true);
-        cc6.disable();
-    } else {
-        cc3a.display(true);
-        cc6.enable();
+    if (state > Init) {
+        // Clear the display only once after the setup
+        static bool afterInit = false;
+        if (!afterInit) {
+            gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
+            afterInit = true;
+        }
+
+        if (testMode) {
+            const long rnd = random(0, 100);
+
+            pb.setProgress((double)rnd).display(true);
+            dpfIcon.setTemperature(((double)rnd) * 6.5);
+        }
+
+        cc1.display();
+        cc2.display();
+
+        if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
+            cc3b.display(true);
+            cc6.disable();
+        } else {
+            cc3a.display(true);
+            cc6.enable();
+        }
+
+        cc4.display();
+        cc5.display();
+        cc6.display();
+
+        pb.display(true);
     }
 
-    cc4.display();
-    cc5.display();
-    cc6.display();
-
-    // dpfIcon.display();
-    pb.display(true);
     Display::unlock();
 }
 
@@ -217,6 +235,8 @@ bool connect() {
 }
 
 void setup() {
+    state = Init;
+
     Serial.begin(115200);
 
     // Will wait for up to ~2 second for Serial to connect.
@@ -316,21 +336,13 @@ void setup() {
 
     Display::init();
 
-#if SIMPLE_GUI == 1
-    gfx.setCursor(0, 0);
-    gfx.println(F("Setup start..."));
-#else
-    gfx.setFont(Fonts::getFont(3));
-    gfx.setCursor(10, gfx.height() / 2 + 10);
-    gfx.println(F("DPF indicator is starting"));
-    if (testMode) {
-        gfx.setCursor(90, gfx.height() / 2 + 30);
-        gfx.println(F("(test mode)"));
-    }
-    gfx.setFont(Fonts::getFont(1));
-#endif
+    Display::welcome();
+
     initGUI();
     idle();
+
+    // Wifi AP web server init
+    WifiServer::init("dpf-indicator", "");
 
     serialBT.SetCommunicationCallback(&callback);
     serialBT.Init();
@@ -354,7 +366,7 @@ void setup() {
     gfx.println(F("Setup end..."));
 #endif
     // Call fill screen twice only works (wtf??)
-    gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
+    // gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
 
     displayGUI();
 #endif
@@ -381,7 +393,7 @@ void idle() {
     if (statusAction()) {
         sb.display();
 
-        if (Regeneration::check() || Buttons::isPressedDown())
+        if (Regeneration::isRegenerating() || Buttons::isPressedDown())
             if (statusAction.state)
                 fireIcon.enable().display();
             else
@@ -394,7 +406,9 @@ void idle() {
 
 void loop() {
 #if BUILD_ENV_NAME == lilygo_t_display_s3
-    // Check the bluetooth status every 1s
+    state = Idle;
+
+    // Check the status every 1s
     if (btAction()) {
         if (!serialBT.IsConnected() && !testMode) {
             // Reconnect
@@ -411,6 +425,7 @@ void loop() {
     // Iterate over measurements map every 5s
     bool measureOK = true;
     if (measureAction()) {
+        state = Measuring;
         for (auto itr = Measurements::getActual().begin(); itr != Measurements::getActual().end(); ++itr) {
             if (itr->second.enabled) {
 #if BUILD_ENV_NAME == lilygo_t_display_s3
@@ -432,26 +447,29 @@ void loop() {
 
                 // Recalculate soot load
                 if (itr->first == SOOT_MASS_CALCULATED) {
-                    Measurements::getValue(SOOT_LOAD) = min(Measurements::getValue(SOOT_MASS_CALCULATED) / 0.24, 100.0);
+                    Measurements::getValue(Measurements::getActual(), SOOT_LOAD) =
+                        min(Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) / 0.24, 100.0);
                 }
             }
-        }
-
-        // Check the first run and assign the measurements at beginning
-        if (measureOK && Measurements::getStart().empty()) {
-            Measurements::copy();
         }
 
         // Simulate the regeneration start
         if (Buttons::isPressedUp()) {
             if (Regeneration::isRegenerating()) {
-                Measurements::setValue(REGENERATION_DURATION, 0.0);
-                Measurements::setValue(DPF_INPUT_TEMPERATURE, 250.0);
-                Measurements::setValue(POST_INJECTION_2, 0.0);
-                Measurements::setValue(POST_INJECTION_3, 0.0);
+                Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.0);
+                Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 250.0);
+                Measurements::setValue(Measurements::getActual(), POST_INJECTION_2, 0.0);
+                Measurements::setValue(Measurements::getActual(), POST_INJECTION_3, 0.0);
             } else {
-                Measurements::setValue(REGENERATION_DURATION, 0.1);
-                Measurements::setValue(DPF_INPUT_TEMPERATURE, 400.0);
+                Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.1);
+                Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 400.0);
+            }
+        }
+
+        // Check the first run and assign the measurements at beginning
+        if (measureOK) {
+            if (Measurements::getStart().empty()) {
+                Measurements::getStart() = Measurements::getActual();
             }
         }
 
@@ -478,7 +496,7 @@ void loop() {
             }
         }
         if (testMode) {
-            Serial.print(Measurements::toString());
+            Serial.print(Measurements::toString(Measurements::getActual()));
         }
         Serial.println("------------------------------------------");
 
@@ -488,11 +506,12 @@ void loop() {
         }
 
         // Update the GUI values
-        if (Measurements::isEnabled(DPF_INPUT_TEMPERATURE)) {
-            dpfIcon.setTemperature(Measurements::getValue(DPF_INPUT_TEMPERATURE));
+        if (Measurements::isEnabled(Measurements::getActual(), DPF_INPUT_TEMPERATURE)) {
+            dpfIcon.setTemperature(Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE));
         }
-        if (Measurements::isEnabled(SOOT_MASS_CALCULATED)) {
-            if (cc2.getValue() != NULL) ((TextLabel*)cc2.getValue())->setText(String(Measurements::getValue(SOOT_MASS_CALCULATED), 2));
+        if (Measurements::isEnabled(Measurements::getActual(), SOOT_MASS_CALCULATED)) {
+            const String& str = String(Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED), 2);
+            if (cc2.getValue() != NULL) ((TextLabel*)cc2.getValue())->setText(str);
 
             const double val = Measurements::diff(SOOT_MASS_CALCULATED);
             if (val >= 0.0) {
@@ -501,8 +520,9 @@ void loop() {
                 if (cc5.getValue() != NULL) ((TextLabel*)cc5.getValue())->setText("(" + String(val, 2));
             }
         }
-        if (Measurements::isEnabled(DISTANCE_SINCE_LAST_REGENERATION)) {
-            if (cc3a.getValue() != NULL) ((TextLabel*)cc3a.getValue())->setText(String(Measurements::getValue(DISTANCE_SINCE_LAST_REGENERATION), 1));
+        if (Measurements::isEnabled(Measurements::getActual(), DISTANCE_SINCE_LAST_REGENERATION)) {
+            const String& str = String(Measurements::getValue(Measurements::getActual(), DISTANCE_SINCE_LAST_REGENERATION), 1);
+            if (cc3a.getValue() != NULL) ((TextLabel*)cc3a.getValue())->setText(str);
 
             const double val = Measurements::diff(DISTANCE_SINCE_LAST_REGENERATION);
             if (val >= 0.0) {
@@ -511,16 +531,24 @@ void loop() {
                 if (cc6.getValue() != NULL) ((TextLabel*)cc6.getValue())->setText("(" + String(val, 1));
             }
         }
-        if (Measurements::isEnabled(REGENERATION_DURATION)) {
-            if (cc3b.getValue() != NULL) ((TextLabel*)cc3b.getValue())->setText(String(Measurements::getValue(REGENERATION_DURATION), 1));
+        if (Measurements::isEnabled(Measurements::getActual(), REGENERATION_DURATION)) {
+            const String& str = String(Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION), 1);
+            if (cc3b.getValue() != NULL) ((TextLabel*)cc3b.getValue())->setText(str);
         }
 
         // Soot load is always disabled
-        pb.setProgress(Measurements::getValue(SOOT_LOAD));
+        pb.setProgress(Measurements::getValue(Measurements::getActual(), SOOT_LOAD));
 
         // Update the GUI
         displayGUI();
+
+        // Update the last measurements
+        if (measureOK) {
+            // Assign the last values to the actual one
+            Measurements::getLast() = Measurements::getActual();
+        }
     }
+    state = Idle;
 
     // How to check the regeneration start?
     // Mass calculated > 24g

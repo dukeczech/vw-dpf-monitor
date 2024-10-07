@@ -30,15 +30,33 @@ String Storage::read(const String& path) {
         return "";
     }
 
-    while (file.available()) {
-        String line = file.readStringUntil('\n');
-        Serial.println(line);
-    }
-
     const String data = file.readString();
     file.close();
 
     return data;
+}
+
+String Storage::readLine(const String& path) {
+    static File file;
+    if (String(file.path()) != path) {
+        file.close();
+    }
+
+    if (!file) {
+        file = LittleFS.open(path);
+        if (!file || file.isDirectory()) {
+            Serial.println(F("Failed to open file for reading"));
+            return "";
+        }
+    }
+
+    if (file.available()) {
+        return file.readStringUntil('\n');
+    }
+
+    file.close();
+
+    return "";
 }
 
 bool Storage::write(const String& path, const String& data) {

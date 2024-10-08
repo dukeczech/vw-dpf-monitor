@@ -2,13 +2,6 @@
 
 bool testMode = false;
 
-#if BUILD_ENV_NAME == lolin32_lite
-// Use specific code for Lolin-32 lite
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-BluetoothSerial serialBT;
-#endif
-
-#if BUILD_ENV_NAME == lilygo_t_display_s3
 // Use specific code for T-display-s3
 
 #if 1
@@ -21,4 +14,3 @@ TFT gfx = TFT();
 #endif
 
 BTAdapter& serialBT = BTAdapter::GetInstance();
-#endif

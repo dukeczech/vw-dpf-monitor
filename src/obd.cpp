@@ -7,7 +7,6 @@
 ELM327 myELM327;
 
 void OBD::init() {
-#if BUILD_ENV_NAME == lilygo_t_display_s3
     // Try to disable expected number of responses
     myELM327.specifyNumResponses = false;
 
@@ -23,16 +22,6 @@ void OBD::init() {
     myELM327.sendCommand_Blocking("ATH1");
     myELM327.sendCommand_Blocking("ATSP6");
     myELM327.sendCommand_Blocking("ATSH7E0");
-#endif
-
-#if BUILD_ENV_NAME == lolin32_lite
-    myELM327.sendCommand_Blocking("ATZ");
-    myELM327.sendCommand_Blocking("ATE0");
-    myELM327.sendCommand_Blocking("ATL0");
-    myELM327.sendCommand_Blocking("ATH0");
-    myELM327.sendCommand_Blocking("ATSP6");
-    myELM327.sendCommand_Blocking("ATSH7E0");
-#endif
 }
 
 double OBD::getPID(const uint8_t& service, const uint16_t& pid, const uint8_t& numResponses, const uint8_t& numExpectedBytes,

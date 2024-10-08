@@ -199,7 +199,6 @@ void displayGUI() {
 }
 
 bool connect() {
-#if BUILD_ENV_NAME == lilygo_t_display_s3
     // Try the connection to be opened
     if (serialBT.IsConnected()) return true;
 
@@ -211,18 +210,10 @@ bool connect() {
 
     if (serialBT.IsConnected()) {
         Serial.println(F("Bluetooth channel is opened"));
-#endif
+
         if (!myELM327.begin(*channel, false, 2000)) {
             Serial.println(F("ELM327 begin failed"));
 
-#if BUILD_ENV_NAME == lolin32_lite
-            display.setCursor(0, 10);
-            display.println(F("ELM327 begin failed"));
-            display.display();
-
-            while (true) {
-            };
-#endif
             return false;
         } else {
             Serial.println(F("ELM327 is connected"));
@@ -232,9 +223,7 @@ bool connect() {
         Serial.println(F("OBD init OK"));
 
         return true;
-#if BUILD_ENV_NAME == lilygo_t_display_s3
     }
-#endif
     return false;
 }
 
@@ -265,71 +254,6 @@ void setup() {
     // Init measurements
     Measurements::init();
 
-#if BUILD_ENV_NAME == lolin32_lite
-    Wire.setPins(I2C_SDA, I2C_SCL);
-
-    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-    if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        Serial.println(F("SSD1306 allocation failed"));
-        return;
-    }
-
-    display.setTextSize(1);  // Normal 1:1 pixel scale
-    // display.setTextColor(SSD1306_WHITE);  // Draw white text
-    display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);  // Draw white text
-    display.setTextWrap(false);
-    display.setCursor(0, 0);  // Start at top-left corner
-    Serial.println(F("SSD1306 allocation OK"));
-
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println(F("Setup start..."));
-    display.display();
-
-#if RANDOM_DATA == 1
-    display.setCursor(0, 10);
-    display.println(F("Setup end..."));
-    display.display();
-
-    display.clearDisplay();
-    return;
-#endif
-
-    serialBT.begin("dpfread", true);
-    serialBT.setPin("1234");
-
-    /*Serial.println("Starting synchronous discovery... ");
-    BTScanResults *pResults = serialBT.discover(10000);
-    if (pResults) {
-      pResults->dump(&Serial);
-    } else {
-      Serial.println("Error on BT Scan, no result!");
-    }*/
-
-    if (!serialBT.connect("V-LINK")) {
-        Serial.println(F("OBD connect KO [1]"));
-
-        display.setCursor(0, 10);
-        display.println(F("OBD connect KO [1]"));
-        display.display();
-
-        // If failed try ELM327 MAC address 10:21:3E:4D:2A:17
-        uint8_t address[6] = {0x10, 0x21, 0x3E, 0x4D, 0x2A, 0x17};
-        if (!serialBT.connect(address)) {
-            Serial.println(F("OBD connect KO [2]"));
-
-            display.setCursor(0, 10);
-            display.println(F("OBD connect KO [2]"));
-            display.display();
-        }
-
-        while (true) {
-        };
-    }
-    channel = &serialBT;
-#endif
-
-#if BUILD_ENV_NAME == lilygo_t_display_s3
     // Init the display
     GFX_EXTRA_PRE_INIT();
 
@@ -352,44 +276,23 @@ void setup() {
     serialBT.Init();
 
     Serial.println(F("Bluetooth init end"));
-#endif
 
     connect();
 
-#if BUILD_ENV_NAME == lolin32_lite
-    display.setCursor(0, 10);
-    display.println(F("Setup end..."));
-    display.display();
-
-    display.clearDisplay();
-#endif
-
-#if BUILD_ENV_NAME == lilygo_t_display_s3
 #if SIMPLE_GUI == 1
     gfx.setCursor(0, 16);
     gfx.println(F("Setup end..."));
 #endif
-    // Call fill screen twice only works (wtf??)
-    // gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
 
     displayGUI();
-#endif
+
     Serial.println(F("DPF indicator setup end"));
 }
 
 void displayLine(uint8_t line, const char* label, const double value, const uint8_t precision, const char* unit) {
-#if BUILD_ENV_NAME == lolin32_lite
-    display.setCursor(0, line * 8);
-    display.print("                           ");
-    display.setCursor(0, line * 8);
-    display.printf("%s: %.*f %s\n", label, precision, value, unit);
-    display.display();
-#endif
-#if BUILD_ENV_NAME == lilygo_t_display_s3
     gfx.fillRect(0, line * 16, gfx.width() - 10, 16, BLACK);
     gfx.setCursor(0, line * 16);
     gfx.printf("%s: %.*f %s\n", label, precision, value, unit);
-#endif
 }
 
 void idle() {
@@ -414,7 +317,6 @@ void idle() {
 }
 
 void loop() {
-#if BUILD_ENV_NAME == lilygo_t_display_s3
     state = Idle;
 
     // Check the status every 1s
@@ -426,7 +328,6 @@ void loop() {
             }
         }
     }
-#endif
 
     // Process idle
     idle();
@@ -437,14 +338,12 @@ void loop() {
         state = Measuring;
         for (auto itr = Measurements::getActual().begin(); itr != Measurements::getActual().end(); ++itr) {
             if (itr->second.enabled) {
-#if BUILD_ENV_NAME == lilygo_t_display_s3
                 // Check the connection status
                 if (!serialBT.IsConnected() && !testMode) {
                     Serial.println(F("Bluetooth channel disconnected"));
                     measureOK = false;
                     break;
                 }
-#endif
 
                 const bool result = Measurements::measure(itr->second, testMode);
                 if (!result) {
@@ -492,16 +391,9 @@ void loop() {
                 displayLine(line, itr->second.shortCaption, itr->second.value, itr->second.precision, itr->second.unit);
 #endif
                 line++;
-#if BUILD_ENV_NAME == lolin32_lite
-                if (line >= 7) {
-                    line = 0;
-                }
-#endif
-#if BUILD_ENV_NAME == lilygo_t_display_s3
                 if (line >= 10) {
                     line = 0;
                 }
-#endif
             }
         }
         if (testMode) {

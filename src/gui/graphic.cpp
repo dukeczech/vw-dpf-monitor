@@ -6,6 +6,7 @@
 #include "bitmaps/bt_icon.h"
 #include "bitmaps/dpf_icon.h"
 #include "bitmaps/fire_icon.h"
+#include "bitmaps/wifi_icon.h"
 #include "config.h"
 
 double ColorUtils::hue2rgb(double p, double q, double t) {
@@ -607,5 +608,19 @@ FireIcon& FireIcon::enable() {
 
 FireIcon& FireIcon::disable() {
     m_color = BACKGROUND_COLOR;
+    return *this;
+}
+
+WifiIcon::WifiIcon(Arduino_GFX& gfx) : Icon(gfx, wifi_icon) {
+    disable();
+}
+
+WifiIcon& WifiIcon::enable() {
+    m_color = RGB565(0xE5, 0xAF, 0x1B);
+    return *this;
+}
+
+WifiIcon& WifiIcon::disable() {
+    m_color = RGB565(0xC0, 0xC0, 0xC0);
     return *this;
 }

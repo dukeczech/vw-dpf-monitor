@@ -298,3 +298,11 @@ class FireIcon : public Icon {
     FireIcon& enable();
     FireIcon& disable();
 };
+
+class WifiIcon : public Icon {
+   public:
+    WifiIcon(Arduino_GFX& gfx);
+
+    WifiIcon& enable();
+    WifiIcon& disable();
+};

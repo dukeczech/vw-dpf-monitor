@@ -28,6 +28,9 @@ const String WifiServer::m_index = R"rawliteral(
 </html>
 )rawliteral";
 
+bool WifiServer::m_up = false;
+bool WifiServer::m_connected = false;
+
 WifiServer::WifiServer() {}
 
 bool WifiServer::init(const String& ssid, const String& password) {
@@ -37,6 +40,7 @@ bool WifiServer::init(const String& ssid, const String& password) {
     // Remove the password parameter, if you want the AP to be open
     WiFi.softAP(ssid, password);
     WiFi.softAPsetHostname(ssid.c_str());
+    WiFi.onEvent(WifiServer::wifiEvent);
 
     IPAddress ip = WiFi.softAPIP();
     Serial.printf("Local IP address: %s\n", ip.toString());
@@ -64,11 +68,12 @@ bool WifiServer::init(const String& ssid, const String& password) {
         request->send_P(200, "text/html", redirect.c_str(), NULL);
     });
 
+    m_up = true;
     return true;
 }
 
 bool WifiServer::hasClient() {
-    return WiFi.softAPgetStationNum() > 0;
+    return m_connected;
 }
 
 void WifiServer::loop() {}
@@ -88,4 +93,18 @@ String WifiServer::table(const String& var) {
         return table;
     }
     return String();
+}
+
+void WifiServer::wifiEvent(WiFiEvent_t event) {
+    // Serial.printf("[WiFi-event] event: %d\n", event);
+    switch (event) {
+        case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
+            m_connected = true;
+            break;
+        case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
+            m_connected = false;
+            break;
+        default:
+            break;
+    }
 }

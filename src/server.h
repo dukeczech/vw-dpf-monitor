@@ -15,7 +15,11 @@ class WifiServer {
 
     static String table(const String& var);
 
+    static void wifiEvent(WiFiEvent_t event);
+
    protected:
+    static bool m_up;
+    static bool m_connected;
     static AsyncWebServer m_server;
     static const String m_index;
 };

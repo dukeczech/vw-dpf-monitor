@@ -36,6 +36,7 @@ eRunningState state = Init;
 Stream* channel = NULL;
 Every measureAction(5000);
 Every btAction(1000);
+Every wifiAction(1000);
 Every::Toggle statusAction(1000);
 
 // First line
@@ -52,6 +53,7 @@ Cell cc6(gfx);
 DPFIcon dpfIcon(gfx);
 BTIcon btIcon(gfx);
 CommIcon commIcon(gfx);
+WifiIcon wifiIcon(gfx);
 FireIcon fireIcon(gfx);
 StatusBar sb(gfx, 40);
 ProgressBar pb(gfx, 15);
@@ -112,11 +114,12 @@ void initGUI() {
     // Init the GUI
     Display::lock();
 
-    sb.setText("DPF indicator", 120);
+    sb.setText("DPF indicator", 150);
 
     btIcon.setPosition(5, 3);
     commIcon.setPosition(30, 7);
-    fireIcon.setPosition(70, 3);
+    wifiIcon.setPosition(67, 5);
+    fireIcon.setPosition(105, 3);
     dpfIcon.getValue().setPadding(-5, 0);
 
     // First line
@@ -151,6 +154,7 @@ void initGUI() {
 
     btIcon.disable().display();
     commIcon.disable().display();
+    wifiIcon.disable().display();
     Display::unlock();
 }
 
@@ -393,6 +397,7 @@ void idle() {
     if (statusAction()) {
         sb.display();
 
+        // Update regeneration status
         if (Regeneration::isRegenerating() || Buttons::isPressedDown())
             if (statusAction.state)
                 fireIcon.enable().display();
@@ -400,6 +405,10 @@ void idle() {
                 fireIcon.disable().display();
         else
             fireIcon.disable().display();
+    }
+    if (wifiAction()) {
+        // Update wifi status
+        WifiServer::hasClient() ? wifiIcon.enable().display() : wifiIcon.disable().display();
     }
     Display::unlock();
 }

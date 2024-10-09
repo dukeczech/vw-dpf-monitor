@@ -1,17 +1,29 @@
+#pragma once
+
 #include <Arduino.h>
 #include <inttypes.h>
 
-#include "config.h"
 #include "bitmaps/icon_data.h"
+#include "config.h"
 #include "fonts/NotoSansMono10pt7b.h"
 #include "fonts/NotoSansMono12pt7b.h"
 #include "fonts/NotoSansMono14pt7b.h"
 #include "fonts/NotoSansMono16pt7b.h"
+#include "fonts/NotoSansMono18pt7b.h"
+#include "fonts/NotoSansMono20pt7b.h"
+#include "fonts/NotoSansMono22pt7b.h"
+#include "fonts/NotoSansMono24pt7b.h"
+#include "fonts/NotoSansMono26pt7b.h"
 #include "fonts/NotoSansMono8pt7b.h"
 #include "fonts/NotoSansRegular10pt7b.h"
 #include "fonts/NotoSansRegular12pt7b.h"
 #include "fonts/NotoSansRegular14pt7b.h"
 #include "fonts/NotoSansRegular16pt7b.h"
+#include "fonts/NotoSansRegular18pt7b.h"
+#include "fonts/NotoSansRegular20pt7b.h"
+#include "fonts/NotoSansRegular22pt7b.h"
+#include "fonts/NotoSansRegular24pt7b.h"
+#include "fonts/NotoSansRegular26pt7b.h"
 #include "fonts/NotoSansRegular8pt7b.h"
 
 // #define USE_DEFAULT_FONT 1
@@ -21,14 +33,27 @@
 #define FONT_SIZE_12 &NotoSansMono_Condensed_Bold12pt7b
 #define FONT_SIZE_14 &NotoSansMono_Condensed_Bold14pt7b
 #define FONT_SIZE_16 &NotoSansMono_Condensed_Bold16pt7b
+#define FONT_SIZE_18 &NotoSansMono_Condensed_Bold18pt7b
+#define FONT_SIZE_20 &NotoSansMono_Condensed_Bold20pt7b
+#define FONT_SIZE_22 &NotoSansMono_Condensed_Bold22pt7b
+#define FONT_SIZE_24 &NotoSansMono_Condensed_Bold24pt7b
+#define FONT_SIZE_26 &NotoSansMono_Condensed_Bold26pt7b
 #define FONT_SIZE_8_BOLD &NotoSansMono_Condensed_Bold8pt7b
 #define FONT_SIZE_10_BOLD &NotoSansMono_Condensed_Bold10pt7b
 #define FONT_SIZE_12_BOLD &NotoSansMono_Condensed_Bold12pt7b
 #define FONT_SIZE_14_BOLD &NotoSansMono_Condensed_Bold14pt7b
 #define FONT_SIZE_16_BOLD &NotoSansMono_Condensed_Bold16pt7b
+#define FONT_SIZE_18_BOLD &NotoSansMono_Condensed_Bold18pt7b
+#define FONT_SIZE_20_BOLD &NotoSansMono_Condensed_Bold20pt7b
+#define FONT_SIZE_22_BOLD &NotoSansMono_Condensed_Bold22pt7b
+#define FONT_SIZE_24_BOLD &NotoSansMono_Condensed_Bold24pt7b
+#define FONT_SIZE_26_BOLD &NotoSansMono_Condensed_Bold26pt7b
+
 
 class BTIcon;
 class CommIcon;
+class FireIcon;
+class WifiIcon;
 
 class ColorUtils {
    public:
@@ -201,8 +226,8 @@ class Cell {
     virtual Label* getLabel() const;
     virtual Label* getValue() const;
 
-    virtual void enable();
-    virtual void disable();
+    virtual Cell& enable();
+    virtual Cell& disable();
 
     virtual Cell& setPosition(const uint16_t x, const uint16_t y);
     virtual Cell& setSize(const uint16_t w, const uint16_t h);

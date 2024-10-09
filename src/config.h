@@ -2,8 +2,6 @@
 
 #define BACKGROUND_COLOR DARKCYAN
 
-extern bool testMode;
-
 // Use specific code for T-display-s3
 #if 0
 #include <Adafruit_GFX.h>
@@ -78,6 +76,16 @@ extern bool testMode;
 extern Arduino_ESP32PAR8Q bus;
 extern Arduino_ST7789 gfx;
 #endif
+
+enum eRunningState {
+    Init,
+    Measuring,
+    Idle,
+    RegenerationEnd
+};
+
+extern bool testMode;
+extern eRunningState state;
 
 #if 0
 // TFT_eSPI GFX

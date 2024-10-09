@@ -83,6 +83,16 @@ const GFXfont* Fonts::getFont(const uint8_t textsize, const bool bold) {
             return bold ? FONT_SIZE_14_BOLD : FONT_SIZE_14;
         case 5:
             return bold ? FONT_SIZE_16_BOLD : FONT_SIZE_16;
+        case 6:
+            return bold ? FONT_SIZE_18_BOLD : FONT_SIZE_18;
+        case 7:
+            return bold ? FONT_SIZE_20_BOLD : FONT_SIZE_20;
+        case 8:
+            return bold ? FONT_SIZE_22_BOLD : FONT_SIZE_22;
+        case 9:
+            return bold ? FONT_SIZE_24_BOLD : FONT_SIZE_24;
+        case 10:
+            return bold ? FONT_SIZE_26_BOLD : FONT_SIZE_26;
         default:
             return bold ? FONT_SIZE_12_BOLD : FONT_SIZE_12;
     }
@@ -393,12 +403,14 @@ Label* Cell::getValue() const {
     return m_value;
 }
 
-void Cell::enable() {
+Cell& Cell::enable() {
     m_enabled = true;
+    return *this;
 }
 
-void Cell::disable() {
+Cell& Cell::disable() {
     m_enabled = false;
+    return *this;
 }
 
 Cell& Cell::setPosition(const uint16_t x, const uint16_t y) {
@@ -616,7 +628,7 @@ WifiIcon::WifiIcon(Arduino_GFX& gfx) : Icon(gfx, wifi_icon) {
 }
 
 WifiIcon& WifiIcon::enable() {
-    m_color = RGB565(0xE5, 0xAF, 0x1B);
+    m_color = RGB565(0xAD, 0xFF, 0x00);
     return *this;
 }
 

@@ -4,6 +4,7 @@
 #include <float.h>
 
 #include "config.h"
+#include "gui/display.h"
 #include "gui/sound.h"
 #include "obd.h"
 #include "storage.h"
@@ -148,9 +149,6 @@ void Measurements::log(std::map<parameter_id, measurement_t>& measurement) {
 
     // Write the measurements
     Storage::append(MEASUREMENTS_LOG, Measurements::toString(measurement));
-
-    Serial.printf("Regeneration started, measurements: %d\n", Storage::countLines(MEASUREMENTS_LOG));
-    Serial.printf("%s\n", Storage::read(MEASUREMENTS_LOG));
 }
 
 String Measurements::toString(std::map<parameter_id, measurement_t>& measurement) {
@@ -190,13 +188,14 @@ bool Regeneration::check() {
     // How to check the regeneration end?
     // Regeneration duration is 0
     // Last regen. distance is 0
-
+    bool stateChanged = false;
     if (m_regeneration) {
         // Try to guess the regeneration process end
         // Turns out that regeneration stopped when the regeneration duration is zero
         if (Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) == 0.0 && !testMode) {
             m_regeneration = false;
             Regeneration::onRegenerationEnd();
+            stateChanged = true;
         }
 
         if (Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE) < 380.0 &&
@@ -205,6 +204,7 @@ bool Regeneration::check() {
              0.0)) {
             m_regeneration = false;
             Regeneration::onRegenerationEnd();
+            stateChanged = true;
         }
     } else {
         // Try to guess the regeneration process start
@@ -213,6 +213,7 @@ bool Regeneration::check() {
             // In the test mode this causes the regeneration starts immediatelly
             m_regeneration = true;
             Regeneration::onRegenerationStart();
+            stateChanged = true;
         }
 
         if (Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) > 24.0 &&
@@ -222,10 +223,11 @@ bool Regeneration::check() {
              0.0)) {
             m_regeneration = true;
             Regeneration::onRegenerationStart();
+            stateChanged = true;
         }
     }
 
-    return m_regeneration;
+    return stateChanged;
 }
 
 void Regeneration::onRegenerationStart() {
@@ -236,6 +238,8 @@ void Regeneration::onRegenerationStart() {
 }
 
 void Regeneration::onRegenerationEnd() {
+    state = RegenerationEnd;
+
     Sound::beep1long();
 
     // Log the last values
@@ -246,6 +250,9 @@ void Regeneration::onRegenerationEnd() {
 
     // Use the new start values
     Measurements::getStart() == Measurements::getActual();
+
+    // Show the result
+    Display::regenerationEnd(sb.getHeight(), Measurements::getValue(Measurements::getLast(), REGENERATION_DURATION));
 
     Serial.println(F("Regeneration ended"));
 }

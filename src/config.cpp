@@ -1,6 +1,7 @@
 #include "config.h"
 
 bool testMode = false;
+eRunningState state = Init;
 
 // Use specific code for T-display-s3
 

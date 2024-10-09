@@ -8,11 +8,6 @@
 
 #include "Every.h"
 #include "config.h"
-#include "gui/bitmaps/distance_icon.h"
-#include "gui/bitmaps/dpf_icon.h"
-#include "gui/bitmaps/soot_icon.h"
-#include "gui/bitmaps/time_icon.h"
-#include "gui/bitmaps/time_regeneration_icon.h"
 #include "gui/buttons.h"
 #include "gui/display.h"
 #include "gui/graphic.h"
@@ -26,40 +21,11 @@
 // https://github.com/jazdw/vag-blocks
 // 067,3,Pressure Differential,DPF,Specification (Idle/Clean DPF): 3.0...7.0 mbar\nSpecification (Partitally clean DPF): 30.0...70.0 mbar\nSpecification (Fully Loaded DPF): max. 300.0 mbar
 
-enum eRunningState {
-    Init,
-    Measuring,
-    Idle
-};
-
-eRunningState state = Init;
-Stream* channel = NULL;
 Every measureAction(5000);
 Every btAction(1000);
 Every wifiAction(1000);
 Every::Toggle statusAction(1000);
 
-// First line
-Cell cc1(gfx);
-Cell cc2(gfx);
-Cell cc3a(gfx);
-Cell cc3b(gfx);
-
-// Second line
-Cell cc4(gfx);
-Cell cc5(gfx);
-Cell cc6(gfx);
-
-DPFIcon dpfIcon(gfx);
-BTIcon btIcon(gfx);
-CommIcon commIcon(gfx);
-WifiIcon wifiIcon(gfx);
-FireIcon fireIcon(gfx);
-StatusBar sb(gfx, 40);
-ProgressBar pb(gfx, 15);
-
-void initGUI();
-void displayGUI();
 void idle();
 
 class IconStatusCallback : public BLEStatusCallback {
@@ -110,94 +76,6 @@ class IconStatusCallback : public BLEStatusCallback {
 
 IconStatusCallback callback;
 
-void initGUI() {
-    // Init the GUI
-    Display::lock();
-
-    sb.setText("DPF indicator", 150);
-
-    btIcon.setPosition(5, 3);
-    commIcon.setPosition(30, 7);
-    wifiIcon.setPosition(67, 5);
-    fireIcon.setPosition(105, 3);
-    dpfIcon.getValue().setPadding(-5, 0);
-
-    // First line
-    uint16_t ycelltop = sb.getHeight() - sb.getBorderHeight() + 6;
-
-    cc1.setSize(gfx.width() / 3 + 1, 72).setPosition(0, ycelltop).setBorder(0);
-    cc1.setLabel(&dpfIcon).getLabel()->setPadding(0, 0);
-
-    cc2.setSize(gfx.width() / 3, 72).setPosition(cc1.getX() + cc1.getWidth() - 6, ycelltop).setBorder(0);
-    cc2.setLabel(new ImageLabel(soot_icon)).getLabel()->setPadding(0, 0).setColor(0xdedb);
-    cc2.setValue(new TextLabel("-.--", "g", 4)).getValue()->setPadding(-5, 0).setColor(0xdedb);
-
-    cc3a.setSize(gfx.width() / 3 + 5, 75).setPosition(cc2.getX() + cc2.getWidth() - 5, ycelltop).setBorder(0);
-    cc3a.setLabel(new ImageLabel(distance_icon)).getLabel()->setPadding(0, 0).setColor(0xafe6);
-    cc3a.setValue(new TextLabel("-.-", "km", 4)).getValue()->setPadding(-5, 0).setColor(0xafe6);
-
-    cc3b.setSize(gfx.width() / 3 + 5, 75).setPosition(cc2.getX() + cc2.getWidth() - 5, ycelltop).setBorder(0);
-    cc3b.setLabel(new ImageLabel(time_regeneration_icon)).getLabel()->setPadding(0, 0).setColor(0xf800);
-    cc3b.setValue(new TextLabel("-.-", "min", 4)).getValue()->setPadding(-5, 0).setColor(0xf800);
-#if 1
-    // Second line
-    ycelltop += sb.getHeight() - sb.getBorderHeight() + cc1.getHeight() - 35;
-
-    cc4.setSize(cc1.getWidth(), 25).setPosition(0, ycelltop).setBorder(0);
-
-    cc5.setSize(cc2.getWidth(), 25).setPosition(cc2.getX(), ycelltop).setBorder(0);
-    cc5.setValue(new TextLabel("(+0.00", "g)", 2)).getValue()->setPadding(-5, 0).setColor(0xdedb);
-
-    cc6.setSize(cc3a.getWidth(), 25).setPosition(cc3a.getX(), ycelltop).setBorder(0);
-    cc6.setValue(new TextLabel("(+0.0", "km)", 2)).getValue()->setPadding(-5, 0).setColor(0xafe6);
-#endif
-
-    btIcon.disable().display();
-    commIcon.disable().display();
-    wifiIcon.disable().display();
-    Display::unlock();
-}
-
-void displayGUI() {
-    Display::lock();
-    sb.display();
-
-    if (state > Init) {
-        // Clear the display only once after the setup
-        static bool afterInit = false;
-        if (!afterInit) {
-            gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
-            afterInit = true;
-        }
-
-        if (testMode) {
-            const long rnd = random(0, 100);
-
-            pb.setProgress((double)rnd).display(true);
-            dpfIcon.setTemperature(((double)rnd) * 6.5);
-        }
-
-        cc1.display();
-        cc2.display();
-
-        if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
-            cc3b.display(true);
-            cc6.disable();
-        } else {
-            cc3a.display(true);
-            cc6.enable();
-        }
-
-        cc4.display();
-        cc5.display();
-        cc6.display();
-
-        pb.display(true);
-    }
-
-    Display::unlock();
-}
-
 bool connect() {
     // Try the connection to be opened
     if (serialBT.IsConnected()) return true;
@@ -206,12 +84,10 @@ bool connect() {
 
     serialBT.Loop();
 
-    channel = &serialBT;
-
     if (serialBT.IsConnected()) {
         Serial.println(F("Bluetooth channel is opened"));
 
-        if (!myELM327.begin(*channel, false, 2000)) {
+        if (!myELM327.begin(serialBT, false, 2000)) {
             Serial.println(F("ELM327 begin failed"));
 
             return false;
@@ -266,7 +142,8 @@ void setup() {
 
     Display::welcome();
 
-    initGUI();
+    Display::setup();
+
     idle();
 
     // Wifi AP web server init
@@ -284,7 +161,7 @@ void setup() {
     gfx.println(F("Setup end..."));
 #endif
 
-    displayGUI();
+    Display::display();
 
     Serial.println(F("DPF indicator setup end"));
 }
@@ -317,14 +194,16 @@ void idle() {
 }
 
 void loop() {
-    state = Idle;
+    if (state != RegenerationEnd) {
+        state = Idle;
+    }
 
     // Check the status every 1s
     if (btAction()) {
         if (!serialBT.IsConnected() && !testMode) {
             // Reconnect
             if (connect()) {
-                displayGUI();
+                Display::display();
             }
         }
     }
@@ -335,6 +214,11 @@ void loop() {
     // Iterate over measurements map every 5s
     bool measureOK = true;
     if (measureAction()) {
+        if (state == RegenerationEnd) {
+            measureAction.reset(5000, false);
+            // Clear the display
+            Display::clear();
+        }
         state = Measuring;
         for (auto itr = Measurements::getActual().begin(); itr != Measurements::getActual().end(); ++itr) {
             if (itr->second.enabled) {
@@ -364,11 +248,18 @@ void loop() {
         // Simulate the regeneration start
         if (Buttons::isPressedUp()) {
             if (Regeneration::isRegenerating()) {
+                // Stop the regeneration
+                Measurements::setValue(Measurements::getLast(), REGENERATION_DURATION, 12.6);
+                Measurements::setValue(Measurements::getLast(), DPF_INPUT_TEMPERATURE, 610.0);
+                Measurements::setValue(Measurements::getLast(), POST_INJECTION_2, 3.66);
+                Measurements::setValue(Measurements::getLast(), POST_INJECTION_3, 5.13);
+
                 Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.0);
                 Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 250.0);
                 Measurements::setValue(Measurements::getActual(), POST_INJECTION_2, 0.0);
                 Measurements::setValue(Measurements::getActual(), POST_INJECTION_3, 0.0);
             } else {
+                // Start the regeneration
                 Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.1);
                 Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 400.0);
             }
@@ -403,7 +294,13 @@ void loop() {
 
         // Check the regeneration process
         if (Regeneration::check()) {
-            // TODO
+            if (state == RegenerationEnd) {
+                // Start the timer to let the screen on
+                measureAction.reset(8000, false);
+                Display::setDirty();
+
+                return;
+            }
         }
 
         // Update the GUI values
@@ -441,15 +338,15 @@ void loop() {
         pb.setProgress(Measurements::getValue(Measurements::getActual(), SOOT_LOAD));
 
         // Update the GUI
-        displayGUI();
+        Display::display();
 
         // Update the last measurements
         if (measureOK) {
             // Assign the last values to the actual one
             Measurements::getLast() = Measurements::getActual();
         }
+        state = Idle;
     }
-    state = Idle;
 
     // How to check the regeneration start?
     // Mass calculated > 24g

@@ -50,6 +50,11 @@ struct measurement_t {
     }
 };
 
+enum eRegenerationState {
+    REGENERATION_OFF,
+    REGENERATION_ON
+};
+
 class Measurements {
    public:
     static const String MEASUREMENTS_LOG;
@@ -71,9 +76,9 @@ class Measurements {
     static bool measure(measurement_t& measurement, const bool randomData = false);
     static float diff(const parameter_id id);
 
-    static void log(std::map<parameter_id, measurement_t>& measurement);
+    static void log(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement);
 
-    static String toString(std::map<parameter_id, measurement_t>& measurement);
+    static String toString(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement);
 
    protected:
     static std::map<parameter_id, measurement_t> m_start;

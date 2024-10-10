@@ -27,7 +27,7 @@ CommIcon commIcon(gfx);
 WifiIcon wifiIcon(gfx);
 FireIcon fireIcon(gfx);
 StatusBar sb(gfx, 40);
-ProgressBar pb(gfx, 15);
+ProgressBar pb(gfx, 20);
 
 bool Display::m_dirty = false;
 portMUX_TYPE Display::m_mutex = portMUX_INITIALIZER_UNLOCKED;

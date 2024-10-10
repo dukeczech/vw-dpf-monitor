@@ -123,11 +123,12 @@ float Measurements::diff(const parameter_id id) {
     return m_actual[id].value - m_start[id].value;
 }
 
-void Measurements::log(std::map<parameter_id, measurement_t>& measurement) {
+void Measurements::log(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement) {
     // Log the measurements to the file
     if (!Storage::exists(MEASUREMENTS_LOG)) {
         // Create a log file header
         String header;
+        header += "Regeneration\t";
         header += getCaption(measurement, DISTANCE_DRIVEN) + " (" + getUnit(measurement, DISTANCE_DRIVEN) + ")\t";
         header += getCaption(measurement, SOOT_MASS_CALCULATED) + " (" + getUnit(measurement, SOOT_MASS_CALCULATED) + ")\t";
         header += getCaption(measurement, REGENERATION_DURATION) + " (" + getUnit(measurement, REGENERATION_DURATION) + ")\t";
@@ -148,12 +149,13 @@ void Measurements::log(std::map<parameter_id, measurement_t>& measurement) {
     }
 
     // Write the measurements
-    Storage::append(MEASUREMENTS_LOG, Measurements::toString(measurement));
+    Storage::append(MEASUREMENTS_LOG, Measurements::toString(status, measurement));
 }
 
-String Measurements::toString(std::map<parameter_id, measurement_t>& measurement) {
+String Measurements::toString(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement) {
     String output;
 
+    output += (status == REGENERATION_OFF) ? "0\t" : "1\t";
     output += String(getValue(measurement, DISTANCE_DRIVEN), (unsigned int)getPrecision(measurement, DISTANCE_DRIVEN)) + "\t";
     output += String(getValue(measurement, SOOT_MASS_CALCULATED), (unsigned int)getPrecision(measurement, SOOT_MASS_CALCULATED)) + "\t";
     output += String(getValue(measurement, REGENERATION_DURATION), (unsigned int)getPrecision(measurement, REGENERATION_DURATION)) + "\t";
@@ -192,16 +194,16 @@ bool Regeneration::check() {
     if (m_regeneration) {
         // Try to guess the regeneration process end
         // Turns out that regeneration stopped when the regeneration duration is zero
-        if (Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) == 0.0 && !testMode) {
+        // Sometimes the regeneration process is started from the condition that checks the temperature and post injection, but the duration is still zero
+        if (Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) < 20.0 &&
+            Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) == 0.0 && !testMode) {
             m_regeneration = false;
             Regeneration::onRegenerationEnd();
             stateChanged = true;
-        }
-
-        if (Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE) < 380.0 &&
-            (Measurements::getValue(Measurements::getActual(), POST_INJECTION_2) +
-                 Measurements::getValue(Measurements::getActual(), POST_INJECTION_3) ==
-             0.0)) {
+        } else if (Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE) < 380.0 &&
+                   (Measurements::getValue(Measurements::getActual(), POST_INJECTION_2) +
+                        Measurements::getValue(Measurements::getActual(), POST_INJECTION_3) ==
+                    0.0)) {
             m_regeneration = false;
             Regeneration::onRegenerationEnd();
             stateChanged = true;
@@ -214,13 +216,11 @@ bool Regeneration::check() {
             m_regeneration = true;
             Regeneration::onRegenerationStart();
             stateChanged = true;
-        }
-
-        if (Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) > 24.0 &&
-            Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE) >= 380.0 &&
-            (Measurements::getValue(Measurements::getActual(), POST_INJECTION_2) +
-                 Measurements::getValue(Measurements::getActual(), POST_INJECTION_3) >
-             0.0)) {
+        } else if (Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) > 24.0 &&
+                   Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE) >= 380.0 &&
+                   (Measurements::getValue(Measurements::getActual(), POST_INJECTION_2) +
+                        Measurements::getValue(Measurements::getActual(), POST_INJECTION_3) >
+                    0.0)) {
             m_regeneration = true;
             Regeneration::onRegenerationStart();
             stateChanged = true;
@@ -234,7 +234,7 @@ void Regeneration::onRegenerationStart() {
     Sound::beep3long();
 
     // Log the regeneration start values
-    Measurements::log(Measurements::getActual());
+    Measurements::log(REGENERATION_ON, Measurements::getActual());
 }
 
 void Regeneration::onRegenerationEnd() {
@@ -243,10 +243,10 @@ void Regeneration::onRegenerationEnd() {
     Sound::beep1long();
 
     // Log the last values
-    Measurements::log(Measurements::getLast());
+    Measurements::log(REGENERATION_ON, Measurements::getLast());
 
     // Log the actual values
-    Measurements::log(Measurements::getActual());
+    Measurements::log(REGENERATION_OFF, Measurements::getActual());
 
     // Use the new start values
     Measurements::getStart() == Measurements::getActual();

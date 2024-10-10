@@ -288,7 +288,7 @@ void loop() {
             }
         }
         if (testMode) {
-            Serial.print(Measurements::toString(Measurements::getActual()));
+            Serial.print(Measurements::toString(REGENERATION_ON, Measurements::getActual()));
         }
         Serial.println("------------------------------------------");
 

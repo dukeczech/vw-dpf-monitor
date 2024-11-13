@@ -194,6 +194,14 @@ void idle() {
 }
 
 void loop() {
+    // Check the file manager
+#ifdef WITH_FILEMANAGER
+    if (WifiServer::hasClient()) {
+        FileManager::setupFilemanager();
+    }
+    FileManager::loop();
+#endif
+
     if (state != RegenerationEnd) {
         state = Idle;
     }

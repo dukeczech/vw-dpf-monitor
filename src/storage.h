@@ -19,3 +19,13 @@ class Storage {
 
    protected:
 };
+
+#ifdef WITH_FILEMANAGER
+class FileManager {
+   public:
+    static void addFileSystems();
+    static uint32_t checkFileFlags(fs::FS& fs, String filename, uint32_t flags);
+    static void setupFilemanager();
+    static void loop();
+};
+#endif

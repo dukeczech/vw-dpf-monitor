@@ -1,3 +1,7 @@
+#ifdef WITH_FILEMANAGER
+#include <ESPFMfGK.h>
+#endif
+
 #include "storage.h"
 
 bool Storage::init() {
@@ -11,6 +15,10 @@ bool Storage::init() {
     } else {
         Serial.println(F("LittleFS mounted OK"));
         initialized = true;
+
+#ifdef WITH_FILEMANAGER
+        FileManager::addFileSystems();
+#endif
         return true;
     }
 }
@@ -106,3 +114,88 @@ uint32_t Storage::countLines(const String& path) {
     }
     return lines;
 }
+
+#ifdef WITH_FILEMANAGER
+
+const word filemanagerport = 8080;
+ESPFMfGK filemgr(filemanagerport);
+
+void FileManager::addFileSystems() {
+    if (!filemgr.AddFS(LittleFS, "Little FS", false)) {
+        Serial.println(F("Adding Little FS failed."));
+    }
+}
+
+uint32_t FileManager::checkFileFlags(fs::FS& fs, String filename, uint32_t flags) {
+    // this will hide system files (in my world, system files start with a dot)
+    if (filename.startsWith("/.")) {
+        // no other flags, file is invisible and nothing allowed
+        return ESPFMfGK::flagIsNotVisible;
+    }
+
+    // Checks if target file name is valid for action. This will simply allow everything by returning the queried flag
+    if (flags & ESPFMfGK::flagIsValidAction) {
+        return flags & (~ESPFMfGK::flagIsValidAction);
+    }
+
+    // Checks if target file name is valid for action.
+    if (flags & ESPFMfGK::flagIsValidTargetFilename) {
+        return flags & (~ESPFMfGK::flagIsValidTargetFilename);
+    }
+
+    // Default actions
+    uint32_t defaultflags = ESPFMfGK::flagCanDelete | ESPFMfGK::flagCanRename | ESPFMfGK::flagCanGZip |  // ^t
+                            ESPFMfGK::flagCanDownload | ESPFMfGK::flagCanUpload;                         // ^t
+
+    // editable files.
+    const String extedit[] PROGMEM = {".html", ".css", ".js", ".txt", ".json", ".ino"};
+
+    filename.toLowerCase();
+    // I simply assume, that editable files are also allowed to be previewd
+    for (int i = 0; i < sizeof(extedit) / sizeof(extedit[0]); i++) {
+        if (filename.endsWith(String(extedit[i]))) {
+            defaultflags |= ESPFMfGK::flagCanEdit | ESPFMfGK::flagAllowPreview;
+            break;
+        }
+    }
+
+    const String extpreview[] PROGMEM = {".jpg", ".png"};
+    for (int i = 0; i < sizeof(extpreview) / sizeof(extpreview[0]); i++) {
+        if (filename.endsWith(String(extpreview[i]))) {
+            defaultflags |= ESPFMfGK::flagAllowPreview;
+            break;
+        }
+    }
+
+    return defaultflags;
+}
+
+void FileManager::setupFilemanager() {
+    static bool initialized = false;
+
+    if (initialized) return;
+
+    filemgr.checkFileFlags = checkFileFlags;
+
+    filemgr.WebPageTitle = "FileManager";
+    filemgr.BackgroundColor = "white";
+    filemgr.textareaCharset = "accept-charset=\"utf-8\"";
+
+    if (/*(WiFi.status() == WL_CONNECTED) &&*/ (filemgr.begin())) {
+        Serial.print(F("Open Filemanager with http://"));
+        Serial.print(WiFi.localIP());
+        Serial.print(F(":"));
+        Serial.print(filemanagerport);
+        Serial.print(F("/"));
+        Serial.println();
+        initialized = true;
+    } else {
+        //Serial.print(F("Filemanager: did not start"));
+    }
+}
+
+void FileManager::loop() {
+    // Check the file manager
+    filemgr.handleClient();
+}
+#endif

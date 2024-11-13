@@ -200,13 +200,6 @@ bool Regeneration::check() {
             m_regeneration = false;
             Regeneration::onRegenerationEnd();
             stateChanged = true;
-        } else if (Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE) < 380.0 &&
-                   (Measurements::getValue(Measurements::getActual(), POST_INJECTION_2) +
-                        Measurements::getValue(Measurements::getActual(), POST_INJECTION_3) ==
-                    0.0)) {
-            m_regeneration = false;
-            Regeneration::onRegenerationEnd();
-            stateChanged = true;
         }
     } else {
         // Try to guess the regeneration process start

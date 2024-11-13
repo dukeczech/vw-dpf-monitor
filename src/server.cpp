@@ -86,8 +86,23 @@ String WifiServer::table(const String& var) {
 
             if (line.isEmpty()) break;
 
-            line.replace("\t", "</td><td>");
-            table += "<tr><td>" + line + "</td></tr>\n";
+            if (line.startsWith("1")) {
+                // Regeneration on
+                line.replace("\t", "</td><td>");
+                table += "<tr style=\"background-color:#CCCC00\"><td>" + line + "</td></tr>\n";
+            } else if (line.startsWith("0")) {
+                // Regeneration off
+                line.replace("\t", "</td><td>");
+                table += "<tr style=\"background-color:#66CC00\"><td>" + line + "</td></tr>\n";
+            } else if (table.length() == strlen("<table>")) {
+                // Header line
+                line.replace("\t", "</th><th>");
+                table += "<tr><th>" + line + "</th></tr>\n";
+            } else {
+                // Other line
+                line.replace("\t", "</td><td>");
+                table += "<tr><td>" + line + "</td></tr>\n";
+            }
         }
         table += "</table>";
         return table;

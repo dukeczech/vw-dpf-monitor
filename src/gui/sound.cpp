@@ -10,6 +10,10 @@ void Sound::beep(const uint32_t freq, const uint32_t duration) {
     tone(BUZZER_PIN, freq, duration);
 }
 
+void Sound::beep1short() {
+    tone(BUZZER_PIN, 3000, 500);
+}
+
 void Sound::beep1long() {
     tone(BUZZER_PIN, 3000, 1500);
 }

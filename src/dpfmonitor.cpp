@@ -24,6 +24,7 @@
 Every measureAction(5000);
 Every btAction(1000);
 Every wifiAction(1000);
+Every beepAction(30000);
 Every::Toggle statusAction(1000);
 
 void idle();
@@ -191,6 +192,13 @@ void idle() {
         WifiServer::hasClient() ? wifiIcon.enable().display() : wifiIcon.disable().display();
     }
     Display::unlock();
+
+    if (beepAction()) {
+        if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
+            // Regeneration is on-going
+            Sound::beep1short();
+        }
+    }
 }
 
 void loop() {

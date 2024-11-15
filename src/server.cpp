@@ -21,7 +21,8 @@ const String WifiServer::m_index = R"rawliteral(
   %TABLEPLACEHOLDER%
   <br></br>
   <br></br>
-  <a href=deletelog>Delete the log file</a>
+  <a href=download>Download the log file</a><br><br>
+  <a href=deletelog>Delete the log file</a><br><br>
 <script>
 </script>
 </body>
@@ -96,6 +97,13 @@ bool WifiServer::init(const String& ssid, const String& password) {
 
         request->send_P(200, "text/html", redirect.c_str(), NULL);
     });
+
+    m_server.serveStatic("/download", LittleFS, Measurements::MEASUREMENTS_LOG.c_str());
+    /*m_server.on("/download", HTTP_GET, [](AsyncWebServerRequest* request) {
+        AsyncWebServerResponse* response = request->beginResponse(LittleFS, Measurements::MEASUREMENTS_LOG, "text/plain", true);
+        response->addHeader("Content-Disposition", "attachment");
+        request->send(response);
+    });*/
 
     m_up = true;
     return true;

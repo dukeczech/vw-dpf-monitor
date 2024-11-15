@@ -24,7 +24,7 @@
 Every measureAction(5000);
 Every btAction(1000);
 Every wifiAction(1000);
-Every beepAction(30000);
+Every::Timer beepAction(30000, false);
 Every::Toggle statusAction(1000);
 
 void idle();
@@ -193,11 +193,18 @@ void idle() {
     }
     Display::unlock();
 
-    if (beepAction()) {
-        if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
-            // Regeneration is on-going
-            Sound::beep1short();
+    if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
+        if (!beepAction.running) {
+            beepAction.reset();
+        } else {
+            if (beepAction()) {
+                // Regeneration is on-going
+                Sound::beep1short();
+                beepAction.reset();
+            }
         }
+    } else {
+        beepAction.running = false;
     }
 }
 
@@ -292,6 +299,7 @@ void loop() {
         uint8_t line = 0;
         Serial.println("------------------------------------------");
         for (auto itr = Measurements::getActual().begin(); itr != Measurements::getActual().end(); ++itr) {
+#if DEBUG_LOG == 1
             if (itr->second.enabled) {
                 Serial.printf("%s: %.*f %s\n", itr->second.caption, itr->second.precision, itr->second.value, itr->second.unit);
 #if SIMPLE_GUI == 1
@@ -302,6 +310,7 @@ void loop() {
                     line = 0;
                 }
             }
+#endif
         }
         if (testMode) {
             Serial.print(Measurements::toString(REGENERATION_ON, Measurements::getActual()));

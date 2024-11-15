@@ -52,16 +52,45 @@ bool WifiServer::init(const String& ssid, const String& password) {
         request->send_P(200, "text/html", WifiServer::m_index.c_str(), WifiServer::table);
     });
 
+    m_server.on("/delete", HTTP_GET, [](AsyncWebServerRequest* request) {
+        size_t params = request->params();
+
+        Serial.printf("%d params sent in\n", params);
+        for (size_t i = 0; i < params; i++) {
+            AsyncWebParameter* p = request->getParam(i);
+            Serial.printf("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
+        }
+        String logid = "[]";
+        if (request->hasParam("id")) {
+            logid = request->getParam("id")->value();
+            Storage::deleteLine(Measurements::MEASUREMENTS_LOG, logid.toInt() + 1);
+        }
+
+        String redirect =
+            "<html>"
+            "<head>"
+            "<meta http-equiv=\"refresh\" content=\"2;url=/\" />"
+            "</head>"
+            "<body>"
+            "Record " +
+            logid +
+            " deleted..."
+            "</body>"
+            "</html>";
+
+        request->send_P(200, "text/html", redirect.c_str(), NULL);
+    });
+
     m_server.on("/deletelog", HTTP_GET, [](AsyncWebServerRequest* request) {
         Storage::remove(Measurements::MEASUREMENTS_LOG);
 
         String redirect =
             "<html>"
             "<head>"
-            "<meta http-equiv=\"refresh\" content=\"3;url=/\" />"
+            "<meta http-equiv=\"refresh\" content=\"2;url=/\" />"
             "</head>"
             "<body>"
-            "Log deleted..."
+            "Log file deleted..."
             "</body>"
             "</html>";
 
@@ -81,6 +110,7 @@ void WifiServer::loop() {}
 String WifiServer::table(const String& var) {
     if (var == "TABLEPLACEHOLDER") {
         String table = "<table>";
+        size_t i = 0;
         while (true) {
             String line = Storage::readLine(Measurements::MEASUREMENTS_LOG);
 
@@ -89,19 +119,23 @@ String WifiServer::table(const String& var) {
             if (line.startsWith("1")) {
                 // Regeneration on
                 line.replace("\t", "</td><td>");
-                table += "<tr style=\"background-color:#CCCC00\"><td>" + line + "</td></tr>\n";
+                table += "<tr style=\"background-color:#CCCC00\"><td>" + String(i) + "</td><td>" + line +
+                         "</td><td><a href=\"delete?id=" + i + "\">delete</a></td></tr>\n";
+                i++;
             } else if (line.startsWith("0")) {
                 // Regeneration off
                 line.replace("\t", "</td><td>");
-                table += "<tr style=\"background-color:#66CC00\"><td>" + line + "</td></tr>\n";
+                table += "<tr style=\"background-color:#66CC00\"><td>" + String(i) + "</td><td>" + line +
+                         "</td><td><a href=\"delete?id=" + i + "\">delete</a></td></tr>\n";
+                i++;
             } else if (table.length() == strlen("<table>")) {
                 // Header line
                 line.replace("\t", "</th><th>");
-                table += "<tr><th>" + line + "</th></tr>\n";
+                table += "<tr><th>#</th><th>" + line + "</th><th></th></tr>\n";
             } else {
                 // Other line
                 line.replace("\t", "</td><td>");
-                table += "<tr><td>" + line + "</td></tr>\n";
+                table += "<tr><td></td><td>" + line + "</td><td></td></tr>\n";
             }
         }
         table += "</table>";

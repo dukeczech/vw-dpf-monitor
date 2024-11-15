@@ -99,6 +99,39 @@ bool Storage::append(const String& path, const String& data) {
     }
 }
 
+bool Storage::deleteLine(const String& path, const size_t linenum) {
+    File file = LittleFS.open(path);
+    if (!file || file.isDirectory()) {
+        Serial.println(F("Failed to open file for reading"));
+        return false;
+    }
+
+    String newcontent = "";
+    // First line is the table heading
+    size_t i = 0;
+    while (true) {
+        if (file.available()) {
+            String line = file.readStringUntil('\n');
+            if (i != linenum) {
+                newcontent += line + "\n";
+            }
+            i++;
+        } else {
+            break;
+        }
+    }
+
+    file.close();
+
+    // Remove the old file
+    Storage::remove(path);
+
+    // Write a new content to a file
+    Storage::write(path, newcontent);
+
+    return true;
+}
+
 uint32_t Storage::countLines(const String& path) {
     File file = LittleFS.open(path);
     if (!file || file.isDirectory()) {
@@ -190,7 +223,7 @@ void FileManager::setupFilemanager() {
         Serial.println();
         initialized = true;
     } else {
-        //Serial.print(F("Filemanager: did not start"));
+        // Serial.print(F("Filemanager: did not start"));
     }
 }
 

@@ -34,10 +34,6 @@ void Measurements::init() {
     m_actual.insert({DIFFERENTIAL_PRESSURE, (measurement_t){11, "Differential pressure", "Diff. press", 0x2214F5, 2, "hPa", 0.0, 0, 0.0, 250.0, NULL, 1.0, 0, NULL, true, false, NULL}});
     m_actual.insert({DISTANCE_DRIVEN, (measurement_t){12, "Distance driven", "Distance", 0x2216A9, 4, "km", 0.0, 0, 0.0, 400000.0, NULL, 1.0, 0, NULL, true, false, NULL}});
     m_actual.insert({LOW_PRESSURE_EGR_CLOSING, (measurement_t){13, "Low press. EGR closing", "EGR", 0x2217F4, 2, "%", 0.0, 0, -100.0, 100.0, &calculateEGRClosing, 1 / 81.92, 0, NULL, true, false, NULL}});
-
-    if (testMode) {
-        Storage::remove(MEASUREMENTS_LOG);
-    }
 }
 
 std::map<parameter_id, measurement_t>& Measurements::getActual() {
@@ -196,7 +192,7 @@ bool Regeneration::check() {
         // Turns out that regeneration stopped when the regeneration duration is zero
         // Sometimes the regeneration process is started from the condition that checks the temperature and post injection, but the duration is still zero
         if (Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) < 20.0 &&
-            Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) == 0.0 && !testMode) {
+            Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) == 0.0) {
             m_regeneration = false;
             Regeneration::onRegenerationEnd();
             stateChanged = true;
@@ -204,7 +200,7 @@ bool Regeneration::check() {
     } else {
         // Try to guess the regeneration process start
         // Turns out that regeneration started when the regeneration duration is positive
-        if (Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) > 0.0 && !testMode) {
+        if (Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) > 0.0) {
             // In the test mode this causes the regeneration starts immediatelly
             m_regeneration = true;
             Regeneration::onRegenerationStart();

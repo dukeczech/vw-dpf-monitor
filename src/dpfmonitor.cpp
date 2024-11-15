@@ -285,6 +285,8 @@ void loop() {
                 // Start the regeneration
                 Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.1);
                 Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 400.0);
+
+                Measurements::disableLog();
             }
         }
 
@@ -324,6 +326,10 @@ void loop() {
                 measureAction.reset(8000, false);
                 Display::setDirty();
 
+                // Re-enable the measurements log
+                if (Buttons::isPressedUp()) {
+                    Measurements::enableLog();
+                }
                 return;
             }
         }

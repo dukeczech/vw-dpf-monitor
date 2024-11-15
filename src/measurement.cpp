@@ -18,6 +18,8 @@ const String Measurements::MEASUREMENTS_LOG = "/measurements.log";
 std::map<parameter_id, measurement_t> Measurements::m_start;
 std::map<parameter_id, measurement_t> Measurements::m_actual;
 std::map<parameter_id, measurement_t> Measurements::m_last;
+bool Measurements::m_testmode = false;
+bool Measurements::m_logenabled = true;
 
 void Measurements::init() {
     m_actual.insert({SOOT_MASS_MEASURED, (measurement_t){1, "Soot mass measured", "Soot mass(m)", 0x221ABE, 2, "g", 0.0, 2, -15.0, 30.0, NULL, 0.01, 0, NULL, true, true, NULL}});
@@ -119,7 +121,17 @@ float Measurements::diff(const parameter_id id) {
     return m_actual[id].value - m_start[id].value;
 }
 
+void Measurements::enableLog() {
+    m_logenabled = true;
+}
+
+void Measurements::disableLog() {
+    m_logenabled = false;
+}
+
 void Measurements::log(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement) {
+    if (!m_logenabled) return;
+
     // Log the measurements to the file
     if (!Storage::exists(MEASUREMENTS_LOG)) {
         // Create a log file header
@@ -242,6 +254,4 @@ void Regeneration::onRegenerationEnd() {
 
     // Show the result
     Display::regenerationEnd(sb.getHeight(), Measurements::getValue(Measurements::getLast(), REGENERATION_DURATION));
-
-    Serial.println(F("Regeneration ended"));
 }

@@ -76,6 +76,8 @@ class Measurements {
     static bool measure(measurement_t& measurement, const bool randomData = false);
     static float diff(const parameter_id id);
 
+    static void enableLog();
+    static void disableLog();
     static void log(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement);
 
     static String toString(const eRegenerationState status, std::map<parameter_id, measurement_t>& measurement);
@@ -85,6 +87,7 @@ class Measurements {
     static std::map<parameter_id, measurement_t> m_actual;
     static std::map<parameter_id, measurement_t> m_last;
     static bool m_testmode;
+    static bool m_logenabled;
 };
 
 class Regeneration {

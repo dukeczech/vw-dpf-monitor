@@ -10,6 +10,7 @@
 #include "gui/buttons.h"
 #include "measurement.h"
 
+// Main page start
 // First line
 Cell cc1(gfx);
 Cell cc2(gfx);
@@ -28,7 +29,13 @@ WifiIcon wifiIcon(gfx);
 FireIcon fireIcon(gfx);
 StatusBar sb(gfx, 40);
 ProgressBar pb(gfx, 20);
+// Main page end
 
+// Summary page start
+Cell sp1(gfx);
+// Summary page end
+
+Display::ePAGE Display::m_page = MAIN;
 bool Display::m_dirty = false;
 portMUX_TYPE Display::m_mutex = portMUX_INITIALIZER_UNLOCKED;
 
@@ -51,6 +58,14 @@ bool Display::init() {
     gfx.setFont(Fonts::getFont(1));
 #endif
     return true;
+}
+
+Display::ePAGE Display::getPage() {
+    return m_page;
+}
+
+void Display::setPage(const ePAGE number) {
+    m_page = number;
 }
 
 void Display::lock() {
@@ -76,6 +91,7 @@ void Display::setup() {
     fireIcon.setPosition(105, 3);
     dpfIcon.getValue().setPadding(-5, 0);
 
+    // Main page start
     // First line
     uint16_t ycelltop = sb.getHeight() - sb.getBorderHeight() + 6;
 
@@ -105,6 +121,15 @@ void Display::setup() {
     cc6.setSize(cc3a.getWidth(), 25).setPosition(cc3a.getX(), ycelltop).setBorder(0);
     cc6.setValue(new TextLabel("(+0.0", "km)", 2)).getValue()->setPadding(-5, 0).setColor(0xafe6);
 #endif
+    // Main page end
+
+    // Summary page start
+    ycelltop = sb.getHeight() - sb.getBorderHeight() + 6;
+
+    sp1.setSize(gfx.width(), 25).setPosition(0, ycelltop).setBorder(0);
+    sp1.setLabel(new TextLabel("Oil ash residue:", "", 3)).getLabel()->setPadding(0, 0).setColor(0xff00);
+    sp1.setValue(new TextLabel("-.--", "g", 4)).getValue()->setPadding(0, 0).setColor(0xff00);
+    // Summary page end
 
     btIcon.disable().display();
     commIcon.disable().display();
@@ -123,38 +148,41 @@ void Display::display() {
     sb.display();
 
     if (state > Init) {
-        // Clear the display only once after the setup
-        static bool afterInit = false;
-        if (!afterInit) {
-            gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
-            afterInit = true;
+        if (m_page == MAIN) {
+            // Clear the display only once after the setup
+            static bool afterInit = false;
+            if (!afterInit) {
+                gfx.fillRect(0, 0 + sb.getHeight(), gfx.width(), gfx.height() - sb.getHeight(), BACKGROUND_COLOR);
+                afterInit = true;
+            }
+
+            if (testMode) {
+                const long rnd = random(0, 100);
+
+                pb.setProgress((double)rnd).display(true);
+                dpfIcon.setTemperature(((double)rnd) * 6.5);
+            }
+
+            // Cell #2 is sligthly wider that overpaints cell #1
+            cc2.display(m_dirty);
+            cc1.display(m_dirty);
+
+            if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
+                cc3b.display(true);
+                cc6.disable();
+            } else {
+                cc3a.display(true);
+                cc6.enable();
+            }
+
+            cc4.display(m_dirty);
+            cc5.display(m_dirty);
+            cc6.display(m_dirty);
+
+            pb.display(true);
+        } else if (m_page == SUMMARY) {
+            sp1.display(m_dirty);
         }
-
-        if (testMode) {
-            const long rnd = random(0, 100);
-
-            pb.setProgress((double)rnd).display(true);
-            dpfIcon.setTemperature(((double)rnd) * 6.5);
-        }
-
-        // Cell #2 is sligthly wider that overpaints cell #1
-        cc2.display(m_dirty);
-        cc1.display(m_dirty);
-
-        if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
-            cc3b.display(true);
-            cc6.disable();
-        } else {
-            cc3a.display(true);
-            cc6.enable();
-        }
-
-        cc4.display(m_dirty);
-        cc5.display(m_dirty);
-        cc6.display(m_dirty);
-
-        pb.display(true);
-
         m_dirty = false;
     }
 
@@ -177,6 +205,9 @@ void Display::welcome() {
     gfx.setFont(Fonts::getFont(1));
 #endif
     Display::unlock();
+}
+
+void Display::summary() {
 }
 
 void Display::regenerationEnd(const uint16_t topy, const double& time) {

@@ -24,6 +24,7 @@
 Every measureAction(5000);
 Every btAction(1000);
 Every wifiAction(1000);
+Every summaryAction(8000);
 Every::Timer beepAction(30000, false);
 Every::Toggle statusAction(1000);
 
@@ -110,7 +111,7 @@ void setup() {
     Serial.begin(115200);
 
     // Will wait for up to ~2 second for Serial to connect.
-    delay(2000);
+    delay(100);
 
     Serial.println(F("DPF indicator setup start"));
 
@@ -193,6 +194,29 @@ void idle() {
     }
     Display::unlock();
 
+    // Switch to the summary page if button is pressed
+    if (Buttons::isPressedUp()) {
+        Serial.println(F("Switch to summary page"));
+        if (Display::getPage() == Display::MAIN) {
+            Display::setPage(Display::SUMMARY);
+            Display::clear();
+            Display::setDirty();
+            Display::display();
+        }
+        summaryAction.reset();
+    }
+
+    // Switch to the main page after the timeout
+    if (summaryAction()) {
+        if (Display::getPage() == Display::SUMMARY) {
+            Serial.println(F("Switch to main page"));
+            Display::setPage(Display::MAIN);
+            Display::clear();
+            Display::setDirty();
+            Display::display();
+        }
+    }
+
     if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
         if (!beepAction.running) {
             beepAction.reset();
@@ -269,7 +293,7 @@ void loop() {
         }
 
         // Simulate the regeneration start
-        if (Buttons::isPressedUp()) {
+        if (false) {
             if (Regeneration::isRegenerating()) {
                 // Stop the regeneration
                 Measurements::setValue(Measurements::getLast(), REGENERATION_DURATION, 12.6);
@@ -325,16 +349,12 @@ void loop() {
                 // Start the timer to let the screen on
                 measureAction.reset(8000, false);
                 Display::setDirty();
-
-                // Re-enable the measurements log
-                if (Buttons::isPressedUp()) {
-                    Measurements::enableLog();
-                }
                 return;
             }
         }
 
         // Update the GUI values
+        // Main page
         if (Measurements::isEnabled(Measurements::getActual(), DPF_INPUT_TEMPERATURE)) {
             dpfIcon.setTemperature(Measurements::getValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE));
         }
@@ -364,9 +384,14 @@ void loop() {
             const String& str = String(Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION), 1);
             if (cc3b.getValue() != NULL) ((TextLabel*)cc3b.getValue())->setText(str);
         }
-
         // Soot load is always disabled
         pb.setProgress(Measurements::getValue(Measurements::getActual(), SOOT_LOAD));
+
+        // Summary page
+        if (Measurements::isEnabled(Measurements::getActual(), OIL_ASH_RESIDUE)) {
+            const String& str = String(Measurements::getValue(Measurements::getActual(), OIL_ASH_RESIDUE), 2);
+            if (sp1.getValue() != NULL) ((TextLabel*)sp1.getValue())->setText(str);
+        }
 
         // Update the GUI
         Display::display();

@@ -627,8 +627,11 @@ WifiIcon::WifiIcon(Arduino_GFX& gfx) : Icon(gfx, wifi_icon) {
     disable();
 }
 
-WifiIcon& WifiIcon::enable() {
-    m_color = RGB565(0xAD, 0xFF, 0x00);
+WifiIcon& WifiIcon::enable(const bool apmode) {
+    if (apmode)
+        m_color = RGB565(0xAD, 0xFF, 0x00);
+    else
+        m_color = RGB565_ORANGE;
     return *this;
 }
 

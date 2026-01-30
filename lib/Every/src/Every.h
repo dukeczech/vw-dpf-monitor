@@ -128,6 +128,7 @@
 class Every {
   public:
     // everthing public
+    bool enabled;
     unsigned long last; // last time we fired
     unsigned long interval = 1000; // "delay" till next firing
 
@@ -136,6 +137,7 @@ class Every {
 
     Every(int interval, bool now = false) : Every( (unsigned long) interval, now) {}
     Every(unsigned long interval, bool now = false) : interval(interval) {
+      enabled = true;
       last = millis(); // so, would wait for interval
 
       if (now) {
@@ -153,7 +155,7 @@ class Every {
         // DEBUG << "drift " << last << " now " << now << " d: " << drift << endl;
         last = now;
         last -= drift;
-        return true;
+        return enabled;
       }
       else {
         return false;
@@ -170,7 +172,7 @@ class Every {
         //Serial << "drift " << last << " now " << now << " d: " << drift << endl;
         last = now;
         last -= drift;
-        return true;
+        return enabled;
       }
       else {
         return false;
@@ -195,6 +197,16 @@ class Every {
       this->interval=interval; 
       reset(now); 
       }
+
+    // Activate the the timer
+    void enable() {
+      enabled = true;
+    }
+
+    // Deactivate the the timer
+    void disable() {
+      enabled = false;
+    }
 
     class Toggle;
     class Pattern;

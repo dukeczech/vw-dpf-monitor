@@ -13,9 +13,10 @@
 #include "gui/graphic.h"
 #include "gui/sound.h"
 #include "measurement.h"
+#include "mqtt.h"
 #include "obd.h"
-#include "server.h"
 #include "storage.h"
+#include "wifi.h"
 
 // Interesting page https://github.com/blizniukp/WIFI_kit_32_dpf/tree/main
 // https://github.com/jazdw/vag-blocks
@@ -29,6 +30,17 @@ Every::Timer beepAction(30000, false);
 Every::Toggle statusAction(1000);
 
 void idle();
+
+enum DeviceState {
+    INIT,
+    CLIENT_MODE,
+    AP_MODE
+};
+
+DeviceState wifiState = INIT;
+unsigned long wifiStartTime = 0;
+const unsigned long WIFI_DURATION = 10000;  // In milliseconds
+bool wifiConnectedOnce = false;
 
 class IconStatusCallback : public BLEStatusCallback {
    public:
@@ -118,6 +130,7 @@ void setup() {
     // Init the buttons
     Buttons::init();
 
+#if TEST_MODE == 1
     if (Buttons::isPressedDown()) {
         testMode = true;
 
@@ -125,9 +138,13 @@ void setup() {
         measureAction = Every(1000);
         Serial.println(F("Test mode is enabled"));
     }
+#endif
 
     // Storage init
     Storage::init();
+
+    // Load the config
+    ApplicationConfig::load();
 
     // Init measurements
     Measurements::init();
@@ -148,20 +165,34 @@ void setup() {
 
     idle();
 
-    // Wifi AP web server init
-    WifiServer::init("dpf-indicator", "");
+    if (Buttons::isPressedDown()) {
+#if TEST_MODE != 1
+        // Disable measure action (se to the huge number)
+        measureAction.disable();
+        btAction.disable();
 
-    serialBT.SetCommunicationCallback(&callback);
-    serialBT.Init();
+        Serial.println(F("Switch to AP mode page"));
+        Display::setPage(Display::AP_MODE);
+        Display::clear();
+        Display::setDirty();
+        Display::display();
+#endif
+    } else {
+        serialBT.SetCommunicationCallback(&callback);
+        serialBT.Init();
 
-    Serial.println(F("Bluetooth init end"));
+        Serial.println(F("Bluetooth init end"));
 
-    connect();
+        connect();
 
 #if SIMPLE_GUI == 1
-    gfx.setCursor(0, 16);
-    gfx.println(F("Setup end..."));
+        gfx.setCursor(0, 16);
+        gfx.println(F("Setup end..."));
 #endif
+    }
+
+    // Start with Wi-Fi mode
+    wifiState = CLIENT_MODE;
 
     Display::display();
 
@@ -174,8 +205,20 @@ void displayLine(uint8_t line, const char* label, const double value, const uint
     gfx.printf("%s: %.*f %s\n", label, precision, value, unit);
 }
 
+void updateWifiStatus() {
+    // Update wifi status
+    if (WifiServer::isUp()) {
+        // Update the AP icon mode
+        WifiServer::hasClient() ? wifiIcon.enable(true).display() : wifiIcon.disable().display();
+    } else {
+        // Update the client icon mode
+        WifiClient::isConnected() ? wifiIcon.enable(false).display() : wifiIcon.disable().display();
+    }
+}
+
 void idle() {
     Display::lock();
+
     if (statusAction()) {
         sb.display();
 
@@ -188,10 +231,11 @@ void idle() {
         else
             fireIcon.disable().display();
     }
+
     if (wifiAction()) {
-        // Update wifi status
-        WifiServer::hasClient() ? wifiIcon.enable().display() : wifiIcon.disable().display();
+        updateWifiStatus();
     }
+
     Display::unlock();
 
     // Switch to the summary page if button is pressed
@@ -217,7 +261,7 @@ void idle() {
         }
     }
 
-    if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
+    if (Regeneration::isRegenerating()) {
         if (!beepAction.running) {
             beepAction.reset();
         } else {
@@ -245,7 +289,64 @@ void loop() {
         state = Idle;
     }
 
-    // Check the status every 1s
+    // Handle the wifi
+    switch (wifiState) {
+        case CLIENT_MODE:
+            if (!wifiConnectedOnce) {
+                // Try to connect
+                if (!wificfg.ssid.isEmpty() && WifiClient::isWifiAvailable(wificfg.ssid)) {
+                    WifiClient::init(wificfg.ssid, wificfg.password);
+
+                    if (WifiClient::isConnected()) {
+                        Serial.println(F("Wi-Fi connected, sending MQTT data"));
+                        MQTTClient::connect();
+
+                        // Update the status bar
+                        updateWifiStatus();
+
+                        while (!MQTTClient::isConnected()) MQTTClient::loop();
+
+                        MQTTClient::sendLogFile(Measurements::MEASUREMENTS_LOG);
+                        MQTTClient::loop();
+
+                        // MQTTClient::disconnect();
+                        wifiConnectedOnce = true;
+                        wifiStartTime = millis();  // start 1-minute timer
+                    }
+                } else {
+                    // Wi-Fi not available, go straight to AP
+                    wifiState = AP_MODE;
+                    break;
+                }
+            } else {
+                // Already connected once, just handle the MQTT loop
+                MQTTClient::loop();
+
+                // Check if 1 minute passed
+                if (millis() - wifiStartTime >= WIFI_DURATION) {
+                    Serial.printf("Switching to AP mode after %d ms\n", WIFI_DURATION);
+                    wifiState = AP_MODE;
+                }
+            }
+            break;
+        case AP_MODE:
+            // Setup AP mode once
+            static bool apInitialized = false;
+            if (!apInitialized) {
+                Serial.println(F("AP mode is going to start, MQTT disconnect"));
+                MQTTClient::disconnect();
+
+                // Wifi AP web server init (see the log file, configure the device...)
+                apInitialized = WifiServer::init("DPF indicator", "");
+            }
+            // Here you can handle AP server loop
+            WifiServer::loop();
+            break;
+        default:
+            break;
+    }
+
+    // Check the BT status every 1s
     if (btAction()) {
         if (!serialBT.IsConnected() && !testMode) {
             // Reconnect
@@ -259,8 +360,8 @@ void loop() {
     idle();
 
     // Iterate over measurements map every 5s
-    bool measureOK = true;
     if (measureAction()) {
+        bool measureOK = true;
         if (state == RegenerationEnd) {
             measureAction.reset(5000, false);
             // Clear the display
@@ -289,28 +390,6 @@ void loop() {
                     Measurements::getValue(Measurements::getActual(), SOOT_LOAD) =
                         min(Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) / 0.24, 100.0);
                 }
-            }
-        }
-
-        // Simulate the regeneration start
-        if (false) {
-            if (Regeneration::isRegenerating()) {
-                // Stop the regeneration
-                Measurements::setValue(Measurements::getLast(), REGENERATION_DURATION, 12.6);
-                Measurements::setValue(Measurements::getLast(), DPF_INPUT_TEMPERATURE, 610.0);
-                Measurements::setValue(Measurements::getLast(), POST_INJECTION_2, 3.66);
-                Measurements::setValue(Measurements::getLast(), POST_INJECTION_3, 5.13);
-
-                Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.0);
-                Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 250.0);
-                Measurements::setValue(Measurements::getActual(), POST_INJECTION_2, 0.0);
-                Measurements::setValue(Measurements::getActual(), POST_INJECTION_3, 0.0);
-            } else {
-                // Start the regeneration
-                Measurements::setValue(Measurements::getActual(), REGENERATION_DURATION, 0.1);
-                Measurements::setValue(Measurements::getActual(), DPF_INPUT_TEMPERATURE, 400.0);
-
-                Measurements::disableLog();
             }
         }
 
@@ -413,6 +492,4 @@ void loop() {
     // How to check the regeneration end?
     // Regeneration duration is 0
     // Last regen. distance is 0
-
-    // delay(5000);
 }

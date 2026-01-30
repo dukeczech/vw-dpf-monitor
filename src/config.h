@@ -20,8 +20,9 @@
         digitalWrite(15 /* PWD */, HIGH); \
     }
 #define GFX_BL 38
+
 #define SIMPLE_GUI 0
-#define TEST_MODE 1
+#define TEST_MODE 0
 #define RANDOM_DATA 1
 
 #define RGB565(r, g, b) ((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))
@@ -76,6 +77,7 @@
 extern Arduino_ESP32PAR8Q bus;
 extern Arduino_ST7789 gfx;
 #endif
+#include <Preferences.h>
 
 enum eRunningState {
     Init,
@@ -84,114 +86,31 @@ enum eRunningState {
     RegenerationEnd
 };
 
-extern bool testMode;
-extern eRunningState state;
-
-#if 0
-// TFT_eSPI GFX
-#include <TFT_eSPI.h>
-
-class TFT : public TFT_eSPI {
-   public:
-    TFT() : TFT_eSPI() {}
-
-    void setFont(const GFXfont* f) {
-        setFreeFont(f);
-    }
-
-    void getTextBounds(const String& input, int16_t x, int16_t y,
-                       int16_t* x1, int16_t* y1, uint16_t* w, uint16_t* h) {
-        uint8_t c;  // Current character
-
-        *x1 = x;
-        *y1 = y;
-        *w = *h = 0;
-
-        int16_t minx = this->width(), miny = this->width(), maxx = -1, maxy = -1;
-
-        const char* str = input.c_str();
-        while ((c = *str++))
-            charBounds(c, &x, &y, &minx, &miny, &maxx, &maxy);
-
-        if (maxx >= minx) {
-            *x1 = minx;
-            *w = maxx - minx + 1;
-        }
-        if (maxy >= miny) {
-            *y1 = miny;
-            *h = maxy - miny + 1;
-        }
-    }
-
-    void charBounds(char c, int16_t* x, int16_t* y,
-                    int16_t* minx, int16_t* miny, int16_t* maxx, int16_t* maxy) {
-        if (gfxFont) {  // If non-default font is used not usable in my quick "hack"
-
-            if (c == '\n')  // Newline
-            {
-                *x = _min_text_x;  // Reset x to zero, advance y by one line
-                *y += (int16_t)textsize_y * (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
-            } else if (c != '\r')  // Not a carriage return; is normal char
-            {
-                uint8_t first = pgm_read_byte(&gfxFont->first),
-                        last = pgm_read_byte(&gfxFont->last);
-                if ((c >= first) && (c <= last))  // Char present in this font?
-                {
-                    GFXglyph* glyph = pgm_read_glyph_ptr(gfxFont, c - first);
-                    uint8_t gw = pgm_read_byte(&glyph->width),
-                            gh = pgm_read_byte(&glyph->height),
-                            xa = pgm_read_byte(&glyph->xAdvance);
-                    int8_t xo = pgm_read_sbyte(&glyph->xOffset),
-                           yo = pgm_read_sbyte(&glyph->yOffset);
-                    if (wrap && ((*x + ((xo + gw) * textsize_x) - 1) > _max_text_x)) {
-                        *x = _min_text_x;  // Reset x to zero, advance y by one line
-                        *y += (int16_t)textsize_y * (uint8_t)pgm_read_byte(&gfxFont->yAdvance);
-                    }
-                    int16_t x1 = *x + ((int16_t)xo * textsize_x),
-                            y1 = *y + ((int16_t)yo * textsize_y),
-                            x2 = x1 + ((int16_t)gw * textsize_x) - 1,
-                            y2 = y1 + ((int16_t)gh * textsize_y) - 1;
-                    if (x1 < *minx) {
-                        *minx = x1;
-                    }
-                    if (y1 < *miny) {
-                        *miny = y1;
-                    }
-                    if (x2 > *maxx) {
-                        *maxx = x2;
-                    }
-                    if (y2 > *maxy) {
-                        *maxy = y2;
-                    }
-                    *x += (int16_t)textsize_x * xa;
-                }
-            }
-        } else {  // Default font
-
-            if (c == '\n') {                                                          // Newline?
-                *x = 0;                                                               // Reset x to zero,
-                *y += this->textsize * 8;                                             // advance y one line
-                                                                                      // min/max x/y unchaged -- that waits for next 'normal' character
-            } else if (c != '\r') {                                                   // Normal char; ignore carriage returns
-                if (/*wrap*/ false && ((*x + this->textsize * 6) > this->width())) {  // Off right?
-                    *x = 0;                                                           // Reset x to zero,
-                    *y += this->textsize * 8;                                         // advance y one line
-                }
-                int x2 = *x + this->textsize * 6 - 1,  // Lower-right pixel of char
-                    y2 = *y + this->textsize * 8 - 1;
-                if (x2 > *maxx) *maxx = x2;  // Track max x, y
-                if (y2 > *maxy) *maxy = y2;
-                if (*x < *minx) *minx = *x;  // Track min x, y
-                if (*y < *miny) *miny = *y;
-                *x += this->textsize * 6;  // Advance x one char
-            }
-        }
-    }
+struct WifiConfig {
+    String ssid;
+    String password;
 };
 
-using Arduino_GFX = TFT;
+struct MqttConfig {
+    String server;
+    uint16_t port;
+    String username;
+    String password;
+    String topic;
+};
 
-extern TFT gfx;
-#endif
-
+extern bool testMode;
+extern eRunningState state;
 extern BTAdapter& serialBT;
+extern Preferences prefs;
+extern WifiConfig wificfg;
+extern MqttConfig mqttcfg;
+
+#define AP_SSID "DPF indicator"
+#define AP_PASSWORD ""
+
+class ApplicationConfig {
+   public:
+    static void load();
+    static void save();
+};

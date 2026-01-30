@@ -35,6 +35,10 @@ ProgressBar pb(gfx, 20);
 Cell sp1(gfx);
 // Summary page end
 
+// AP mode page start
+Cell apm1(gfx);
+// AP mode page end
+
 Display::ePAGE Display::m_page = MAIN;
 bool Display::m_dirty = false;
 portMUX_TYPE Display::m_mutex = portMUX_INITIALIZER_UNLOCKED;
@@ -131,6 +135,13 @@ void Display::setup() {
     sp1.setValue(new TextLabel("-.--", "g", 4)).getValue()->setPadding(0, 0).setColor(0xff00);
     // Summary page end
 
+    // AP mode page start
+    ycelltop = sb.getHeight() - sb.getBorderHeight() + 6;
+
+    apm1.setSize(gfx.width(), 25).setPosition(0, ycelltop).setBorder(0);
+    apm1.setLabel(new TextLabel("AP mode ON...", 3)).getLabel()->setPadding(0, 0).setColor(0xff00);
+    // AP mode page end
+
     btIcon.disable().display();
     commIcon.disable().display();
     wifiIcon.disable().display();
@@ -182,6 +193,8 @@ void Display::display() {
             pb.display(true);
         } else if (m_page == SUMMARY) {
             sp1.display(m_dirty);
+        } else if (m_page == AP_MODE) {
+            apm1.display(m_dirty);
         }
         m_dirty = false;
     }

@@ -10,7 +10,9 @@ class WifiServer {
     WifiServer();
 
     static bool init(const String& ssid, const String& password);
+    static bool isUp();
     static bool hasClient();
+    static bool getIP();
     static void loop();
 
     static String table(const String& var);
@@ -22,4 +24,15 @@ class WifiServer {
     static bool m_connected;
     static AsyncWebServer m_server;
     static const String m_index;
+};
+
+class WifiClient {
+   public:
+    WifiClient();
+
+    static bool init(const String& ssid, const String& password);
+    static bool isConnected();
+    static bool getIP();
+    static void loop();
+    static bool isWifiAvailable(const String& ssid, int timeout = 2000);
 };

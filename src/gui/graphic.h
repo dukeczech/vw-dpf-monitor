@@ -49,7 +49,6 @@
 #define FONT_SIZE_24_BOLD &NotoSansMono_Condensed_Bold24pt7b
 #define FONT_SIZE_26_BOLD &NotoSansMono_Condensed_Bold26pt7b
 
-
 class BTIcon;
 class CommIcon;
 class FireIcon;
@@ -328,6 +327,6 @@ class WifiIcon : public Icon {
    public:
     WifiIcon(Arduino_GFX& gfx);
 
-    WifiIcon& enable();
+    WifiIcon& enable(const bool apmode = true);
     WifiIcon& disable();
 };

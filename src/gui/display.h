@@ -31,7 +31,8 @@ class Display {
    public:
     enum ePAGE {
         MAIN = 0,
-        SUMMARY
+        SUMMARY,
+        AP_MODE
     };
     static ePAGE m_page;
     static bool m_dirty;

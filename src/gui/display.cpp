@@ -178,7 +178,7 @@ void Display::display() {
             cc2.display(m_dirty);
             cc1.display(m_dirty);
 
-            if (Regeneration::isRegenerating() || Buttons::isPressedDown()) {
+            if (Regeneration::isRegenerating()) {
                 cc3b.display(true);
                 cc6.disable();
             } else {

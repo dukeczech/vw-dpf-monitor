@@ -98,7 +98,7 @@ bool WifiServer::init(const String& ssid, const String& password) {
 
         Serial.printf("%d params sent in\n", params);
         for (size_t i = 0; i < params; i++) {
-            AsyncWebParameter* p = request->getParam(i);
+            const AsyncWebParameter* p = request->getParam(i);
             Serial.printf("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
         }
         String logid = "[]";

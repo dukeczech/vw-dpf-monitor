@@ -27,26 +27,6 @@
 
 #define RGB565(r, g, b) ((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))
 
-#define RGB565_BLACK RGB565(0, 0, 0)
-#define RGB565_NAVY RGB565(0, 0, 123)
-#define RGB565_DARKGREEN RGB565(0, 125, 0)
-#define RGB565_DARKCYAN RGB565(0, 125, 123)
-#define RGB565_MAROON RGB565(123, 0, 0)
-#define RGB565_PURPLE RGB565(123, 0, 123)
-#define RGB565_OLIVE RGB565(123, 125, 0)
-#define RGB565_LIGHTGREY RGB565(198, 195, 198)
-#define RGB565_DARKGREY RGB565(123, 125, 123)
-#define RGB565_BLUE RGB565(0, 0, 255)
-#define RGB565_GREEN RGB565(0, 255, 0)
-#define RGB565_CYAN RGB565(0, 255, 255)
-#define RGB565_RED RGB565(255, 0, 0)
-#define RGB565_MAGENTA RGB565(255, 0, 255)
-#define RGB565_YELLOW RGB565(255, 255, 0)
-#define RGB565_WHITE RGB565(255, 255, 255)
-#define RGB565_ORANGE RGB565(255, 165, 0)
-#define RGB565_GREENYELLOW RGB565(173, 255, 41)
-#define RGB565_PALERED RGB565(255, 130, 198)
-
 // Color definitions
 #ifndef DISABLE_COLOR_DEFINES
 #define BLACK RGB565_BLACK
@@ -113,4 +93,16 @@ class ApplicationConfig {
    public:
     static void load();
     static void save();
+};
+
+class NullSerial : public Stream {
+   public:
+    virtual size_t write(uint8_t) { return (1); }
+    virtual int available() { return (0); }
+    virtual int read() { return (0); }
+    virtual int peek() { return (0); }
+    virtual void flush() {}
+
+    void begin(unsigned long, uint8_t) {}
+    void end() {}
 };

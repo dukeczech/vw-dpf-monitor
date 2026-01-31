@@ -120,7 +120,9 @@ bool connect() {
 void setup() {
     state = Init;
 
+#if defined(DEBUG)
     Serial.begin(115200);
+#endif
 
     // Will wait for up to ~2 second for Serial to connect.
     delay(100);
@@ -167,7 +169,7 @@ void setup() {
 
     if (Buttons::isPressedDown()) {
 #if TEST_MODE != 1
-        // Disable measure action (se to the huge number)
+        // Disable measure action
         measureAction.disable();
         btAction.disable();
 
@@ -223,7 +225,7 @@ void idle() {
         sb.display();
 
         // Update regeneration status
-        if (Regeneration::isRegenerating() || Buttons::isPressedDown())
+        if (Regeneration::isRegenerating())
             if (statusAction.state)
                 fireIcon.enable().display();
             else

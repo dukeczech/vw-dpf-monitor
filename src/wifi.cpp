@@ -255,7 +255,7 @@ WifiClient::WifiClient() {
 }
 
 bool WifiClient::init(const String& ssid, const String& password) {
-    Serial.printf("Setting the wifi station to: %s\n", ssid.c_str());
+    Serial.printf("Setting the wifi client to: %s\n", ssid.c_str());
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), password.c_str());
@@ -266,13 +266,13 @@ bool WifiClient::init(const String& ssid, const String& password) {
         Serial.print(".");
         attempts++;
     }
-    Serial.println("\nWiFi init end");
+    Serial.println("\nWiFi client init end");
     return isConnected();
 }
 
 bool WifiClient::isConnected() {
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("Wi-Fi connected: " + WiFi.localIP().toString());
+        Serial.printf("Wi-Fi client connected (%s)\n", WiFi.localIP().toString().c_str());
         return true;
     }
     return false;

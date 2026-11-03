@@ -122,6 +122,8 @@ void setup() {
 
 #if defined(DEBUG)
     Serial.begin(115200);
+    const uint32_t t0 = millis();
+    while (!Serial && millis() - t0 < 3000) delay(10);   // max 3 s
 #endif
 
     // Will wait for up to ~2 second for Serial to connect.
@@ -300,20 +302,28 @@ void loop() {
                     WifiClient::init(wificfg.ssid, wificfg.password);
 
                     if (WifiClient::isConnected()) {
+                        wifiConnectedOnce = true;
+                        wifiStartTime = millis();  // Start a timer
+
                         Serial.println(F("Wi-Fi connected, sending MQTT data"));
-                        MQTTClient::connect();
+                        if(!MQTTClient::connect()) {
+                            Serial.println(F("MQTT server unavailable"));
+                            break;
+                        }
 
                         // Update the status bar
                         updateWifiStatus();
 
                         while (!MQTTClient::isConnected()) MQTTClient::loop();
 
-                        MQTTClient::sendLogFile(Measurements::MEASUREMENTS_LOG);
+                        const bool sent = MQTTClient::sendLogFile(Measurements::MEASUREMENTS_LOG);
                         MQTTClient::loop();
-
-                        // MQTTClient::disconnect();
-                        wifiConnectedOnce = true;
-                        wifiStartTime = millis();  // start 1-minute timer
+                        Serial.printf("MQTT upload %s\n", sent ? "OK" : "NOT OK");
+                        if(sent) {
+                            // Send data ok, go straight to AP
+                            wifiState = AP_MODE;
+                            break;
+                        }
                     }
                 } else {
                     // Wi-Fi not available, go straight to AP
@@ -324,8 +334,10 @@ void loop() {
                 // Already connected once, just handle the MQTT loop
                 MQTTClient::loop();
 
-                // Check if 1 minute passed
+                // Check if WIFI_DURATION interval passed
                 if (millis() - wifiStartTime >= WIFI_DURATION) {
+                    MQTTClient::disconnect();
+
                     Serial.printf("Switching to AP mode after %d ms\n", WIFI_DURATION);
                     wifiState = AP_MODE;
                 }
@@ -350,7 +362,8 @@ void loop() {
 
     // Check the BT status every 1s
     if (btAction()) {
-        if (!serialBT.IsConnected() && !testMode) {
+        // Reconnect bluetooth only if there is no active wifi client
+        if (!serialBT.IsConnected() && !testMode && !WifiServer::hasClient()) {
             // Reconnect
             if (connect()) {
                 Display::display();

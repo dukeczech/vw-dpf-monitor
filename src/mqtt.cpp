@@ -13,6 +13,7 @@ const String MQTTClient::AVAILIBILITY_TOPIC = NODE_ID + "/status";
 const String MQTTClient::STATE_TOPIC = NODE_ID + "/state";
 
 bool MQTTClient::connect() {
+    Serial.printf("[MQTT] Connecting to the MQTT server %s:%d", mqttcfg.server.c_str(), mqttcfg.port);
     mqttClient.setServer(mqttcfg.server.c_str(), mqttcfg.port);
     // Increase the mqtt client buffer size (the state message has ~500 characters)
     mqttClient.setBufferSize(750);
@@ -31,13 +32,13 @@ bool MQTTClient::connect() {
     }
 
     if (!mqttClient.connected()) {
-        Serial.println("MQTT connection failed, skipping send");
+        Serial.println(F("[MQTT] connection failed, skipping send"));
         return false;
     }
 
     mqttClient.publish(AVAILIBILITY_TOPIC.c_str(), "online", true);
 
-    Serial.println("MQTT connected");
+    Serial.println("[MQTT] connected");
     return true;
 }
 
@@ -101,7 +102,7 @@ void MQTTClient::publishAutoDiscovery(const std::vector<String>& headers) {
         mqttClient.publish(discoveryTopic.c_str(), payload.c_str(), true);
     }
 
-    Serial.println("Home Assistant auto-discovery published for all columns");
+    Serial.println("[MQTT] HASS auto-discovery published for all columns");
 }
 
 bool MQTTClient::isConnected() {
@@ -170,13 +171,11 @@ String MQTTClient::deviceClassFromUnit(const String& unit) {
     return "";  // default: no device_class
 }
 
-void MQTTClient::sendLogFile(const String& path) {
-    // publishState();
-
+bool MQTTClient::sendLogFile(const String& path) {
     // First line = headers
     String headerLine = Storage::readLine(path);
     headerLine.trim();
-    if (headerLine.length() == 0) return;
+    if (headerLine.length() == 0) return false;
 
     // Split headers
     std::vector<String> headers;
@@ -191,6 +190,7 @@ void MQTTClient::sendLogFile(const String& path) {
     publishAutoDiscovery(headers);
 
     // Read data lines
+    size_t sent = 0, failed = 0;
     while (true) {
         String line = Storage::readLine(path);
         line.trim();
@@ -221,14 +221,23 @@ void MQTTClient::sendLogFile(const String& path) {
         Serial.println(STATE_TOPIC);
         Serial.print("[MQTT] Payload: ");
         Serial.println(payload);
-
-        mqttClient.publish(STATE_TOPIC.c_str(), payload.c_str(), true);
+        
+        if (mqttClient.publish(STATE_TOPIC.c_str(), payload.c_str(), true)) {
+            sent++;
+        } else {
+            failed++;
+            Serial.printf("[MQTT] Publish failed (len=%u, state=%d)\n",
+                        payload.length(), mqttClient.state());
+        }
 
         // Flush buffer
-        loop();
+        mqttClient.loop();
+
+        Serial.printf("[MQTT] Sent %u, failed %u\n", sent, failed);
     }
 
-    Serial.println("Finished sending log file to MQTT");
+    Serial.println("[MQTT] Finished sending log file to the broker");
+    return failed == 0 && mqttClient.connected();
 }
 
 bool MQTTClient::loop() {

@@ -15,7 +15,7 @@ class MQTTClient {
     static String extractUnit(const String& h);
     static String extractName(const String& h);
     static String deviceClassFromUnit(const String& unit);
-    static void sendLogFile(const String& path);
+    static bool sendLogFile(const String& path);
     static bool loop();
 
    private:

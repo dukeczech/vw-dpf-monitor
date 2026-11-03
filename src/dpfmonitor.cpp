@@ -314,13 +314,11 @@ void loop() {
                         // Update the status bar
                         updateWifiStatus();
 
-                        while (!MQTTClient::isConnected()) MQTTClient::loop();
-
+                        // Discovery + last values + whole log file, confirmed by the broker
                         const bool sent = MQTTClient::sendLogFile(Measurements::MEASUREMENTS_LOG);
-                        MQTTClient::loop();
-                        Serial.printf("MQTT upload %s\n", sent ? "OK" : "NOT OK");
-                        if(sent) {
-                            // Send data ok, go straight to AP
+                        if (sent) {
+                            // Data delivered, go straight to AP
+                            MQTTClient::disconnect();
                             wifiState = AP_MODE;
                             break;
                         }

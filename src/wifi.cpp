@@ -84,7 +84,7 @@ bool WifiServer::init(const String& ssid, const String& password) {
     WiFi.onEvent(WifiServer::wifiEvent);
 
     IPAddress ip = WiFi.softAPIP();
-    Serial.printf("Local IP address: %s\n", ip.toString());
+    Serial.printf("Local IP address: %s\n", ip.toString().c_str());
 
     m_server.begin();
 
@@ -193,7 +193,7 @@ bool WifiServer::hasClient() {
     return m_connected;
 }
 
-bool WifiServer::getIP() {
+String WifiServer::getIP() {
     return WiFi.softAPIP().toString();
 }
 
@@ -267,18 +267,18 @@ bool WifiClient::init(const String& ssid, const String& password) {
         attempts++;
     }
     Serial.println("\nWiFi client init end");
-    return isConnected();
-}
-
-bool WifiClient::isConnected() {
-    if (WiFi.status() == WL_CONNECTED) {
+    if (isConnected()) {
         Serial.printf("Wi-Fi client connected (%s)\n", WiFi.localIP().toString().c_str());
         return true;
     }
     return false;
 }
 
-bool WifiClient::getIP() {
+bool WifiClient::isConnected() {
+    return WiFi.status() == WL_CONNECTED;
+}
+
+String WifiClient::getIP() {
     return WiFi.localIP().toString();
 }
 

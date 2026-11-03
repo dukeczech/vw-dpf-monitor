@@ -12,7 +12,7 @@ class WifiServer {
     static bool init(const String& ssid, const String& password);
     static bool isUp();
     static bool hasClient();
-    static bool getIP();
+    static String getIP();
     static void loop();
 
     static String table(const String& var);
@@ -32,7 +32,7 @@ class WifiClient {
 
     static bool init(const String& ssid, const String& password);
     static bool isConnected();
-    static bool getIP();
+    static String getIP();
     static void loop();
     static bool isWifiAvailable(const String& ssid, int timeout = 2000);
 };

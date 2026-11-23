@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 #include <float.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -41,6 +42,10 @@ DeviceState wifiState = INIT;
 unsigned long wifiStartTime = 0;
 const unsigned long WIFI_DURATION = 10000;  // In milliseconds
 bool wifiConnectedOnce = false;
+
+// Restart the device when the main loop is stuck longer than this (e.g. a hung OBD/BLE
+// communication). Long enough for the slowest legitimate blocking call (BLE connect).
+const uint32_t LOOP_WDT_TIMEOUT_S = 60;
 
 class IconStatusCallback : public BLEStatusCallback {
    public:
@@ -199,6 +204,10 @@ void setup() {
     wifiState = CLIENT_MODE;
 
     Display::display();
+
+    // Watch the main loop; after a reset an interrupted regeneration is finished by Regeneration::recover()
+    esp_task_wdt_init(LOOP_WDT_TIMEOUT_S, true);
+    enableLoopWDT();
 
     Serial.println(F("DPF indicator setup end"));
 }
@@ -410,6 +419,9 @@ void loop() {
         if (measureOK) {
             if (Measurements::getStart().empty()) {
                 Measurements::getStart() = Measurements::getActual();
+
+                // Finish a regeneration record interrupted by a reset
+                Regeneration::recover();
             }
         }
 

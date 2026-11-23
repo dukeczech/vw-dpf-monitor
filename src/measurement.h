@@ -94,6 +94,7 @@ class Regeneration {
    public:
     static bool isRegenerating();
     static bool check();
+    static void recover();
 
     static void onRegenerationStart();
     static void onRegenerationEnd();

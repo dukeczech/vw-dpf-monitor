@@ -15,6 +15,7 @@ class Storage {
     static bool write(const String& path, const String& data);
     static bool append(const String& path, const String& data);
     static bool deleteLine(const String& path, const size_t linenum);
+    static String lastLine(const String& path);
 
     static uint32_t countLines(const String& path);
 

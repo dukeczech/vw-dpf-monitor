@@ -231,6 +231,29 @@ bool Regeneration::check() {
     return stateChanged;
 }
 
+void Regeneration::recover() {
+    // Called once after the first successful measurement after boot.
+    // A complete regeneration in the log ends with a "0" (regeneration off) line.
+    // If the last line is a "1" line, the device was reset or stuck during a regeneration
+    // and the end of it was never logged.
+    if (!Storage::lastLine(Measurements::MEASUREMENTS_LOG).startsWith("1")) return;
+
+    const bool ended = Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED) < 20.0 &&
+                       Measurements::getValue(Measurements::getActual(), REGENERATION_DURATION) == 0.0;
+
+    if (!ended) {
+        // Still regenerating, continue without logging the start again;
+        // the end is logged by check() as usual
+        Serial.println(F("Interrupted regeneration is still running, resuming"));
+        m_regeneration = true;
+    } else {
+        // Finished while the device was off; the values at the end are lost,
+        // so close the record with the actual values
+        Serial.println(F("Interrupted regeneration has finished, logging the end"));
+        Measurements::log(REGENERATION_OFF, Measurements::getActual());
+    }
+}
+
 void Regeneration::onRegenerationStart() {
     Sound::beep3long();
 
@@ -250,7 +273,7 @@ void Regeneration::onRegenerationEnd() {
     Measurements::log(REGENERATION_OFF, Measurements::getActual());
 
     // Use the new start values
-    Measurements::getStart() == Measurements::getActual();
+    Measurements::getStart() = Measurements::getActual();
 
     // Show the result
     Display::regenerationEnd(sb.getHeight(), Measurements::getValue(Measurements::getLast(), REGENERATION_DURATION));

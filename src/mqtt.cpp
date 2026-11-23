@@ -1,6 +1,7 @@
 #include "mqtt.h"
 
 #include <LittleFS.h>
+#include <esp_task_wdt.h>
 
 #include "storage.h"
 #include "wifi.h"
@@ -35,6 +36,8 @@ bool MQTTClient::connect() {
                                AVAILIBILITY_TOPIC.c_str(), 0, true, "offline"))
             break;
         Serial.print(".");
+        // Each attempt can block for the socket timeout, keep the loop watchdog fed
+        esp_task_wdt_reset();
         delay(500);
         mqttAttempts++;
     }

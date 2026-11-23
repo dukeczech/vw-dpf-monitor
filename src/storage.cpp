@@ -106,30 +106,66 @@ bool Storage::deleteLine(const String& path, const size_t linenum) {
         return false;
     }
 
-    String newcontent = "";
+    // Copy all the lines except the deleted one to a temporary file line by line,
+    // so the file size is not limited by the RAM or the String capacity (64 KB)
+    const String tmppath = path + ".tmp";
+    File tmp = LittleFS.open(tmppath, FILE_WRITE);
+    if (!tmp) {
+        Serial.println(F("Failed to open temporary file for writing"));
+        file.close();
+        return false;
+    }
+
     // First line is the table heading
     size_t i = 0;
-    while (true) {
-        if (file.available()) {
-            String line = file.readStringUntil('\n');
-            if (i != linenum) {
-                newcontent += line + "\n";
-            }
-            i++;
-        } else {
-            break;
+    bool ok = true;
+    while (ok && file.available()) {
+        const String line = file.readStringUntil('\n');
+        if (i != linenum) {
+            ok = tmp.print(line) == line.length() && tmp.print('\n') == 1;
         }
+        i++;
     }
 
     file.close();
+    tmp.close();
 
-    // Remove the old file
-    Storage::remove(path);
+    if (!ok) {
+        // Keep the original file untouched
+        Serial.println(F("Failed to write temporary file"));
+        LittleFS.remove(tmppath);
+        return false;
+    }
 
-    // Write a new content to a file
-    Storage::write(path, newcontent);
+    // Replace the original file only after the new content is completely written.
+    // LittleFS renames atomically over an existing file.
+    if (!LittleFS.rename(tmppath, path)) {
+        if (!LittleFS.remove(path) || !LittleFS.rename(tmppath, path)) {
+            Serial.println(F("Failed to replace the file"));
+            return false;
+        }
+    }
 
     return true;
+}
+
+String Storage::lastLine(const String& path) {
+    File file = LittleFS.open(path);
+    if (!file || file.isDirectory()) return "";
+
+    // Only the end of the file is needed, a log line is much shorter than this
+    const size_t tail = 512;
+    if (file.size() > tail) file.seek(file.size() - tail);
+
+    String last;
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (!line.isEmpty()) last = line;
+    }
+    file.close();
+
+    return last;
 }
 
 uint32_t Storage::countLines(const String& path) {

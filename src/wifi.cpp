@@ -4,7 +4,25 @@
 #include "measurement.h"
 #include "storage.h"
 
+#include <esp_task_wdt.h>
+
+#include <memory>
+
 AsyncWebServer WifiServer::m_server(80);
+
+static const char TABLE_PLACEHOLDER[] = "%TABLEPLACEHOLDER%";
+
+// State of one streamed index page response
+struct IndexStream {
+    enum Stage { HEAD, ROWS, TAIL, DONE };
+
+    Stage stage = HEAD;
+    File file;
+    String pending;      // generated, not yet sent part of the page
+    size_t pos = 0;      // how much of pending has been sent
+    size_t row = 0;      // log record number shown in the table
+    bool header = false; // table header row already generated
+};
 
 const String WifiServer::m_index = R"rawliteral(
 <!DOCTYPE HTML>
@@ -33,7 +51,26 @@ const String WifiServer::m_index = R"rawliteral(
   <br></br>
   <br></br>
   <a href="download">Download the log file</a><br><br>
-  <a href="deletelog">Delete the log file</a><br><br>
+  <a href="#" onclick="return delLog()">Delete the log file</a><br><br>
+
+  <script>
+    // Deleting is a POST request after a confirmation, so a stray click or a link
+    // prefetch cannot delete the data
+    function post(url, body) {
+      fetch(url, {method: 'POST', body: body})
+        .then(r => r.text().then(t => { alert(t); location.reload(); }))
+        .catch(e => alert('Request failed: ' + e));
+      return false;
+    }
+    function del(id) {
+      if (!confirm('Delete record ' + id + '?')) return false;
+      return post('delete', new URLSearchParams({id: id}));
+    }
+    function delLog() {
+      if (!confirm('Delete the whole log file? This cannot be undone.')) return false;
+      return post('deletelog');
+    }
+  </script>
 
   <div style="margin-top:40px;">
     <a class="config-link" href="/config">configuration</a>
@@ -90,52 +127,59 @@ bool WifiServer::init(const String& ssid, const String& password) {
 
     // Route for root / web page
     m_server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send_P(200, "text/html", WifiServer::m_index.c_str(), WifiServer::table);
+        // The state is shared with the filler and released (file closed) when the response ends
+        auto stream = std::make_shared<IndexStream>();
+
+        AsyncWebServerResponse* response = request->beginChunkedResponse(
+            "text/html", [stream](uint8_t* buffer, size_t maxLen, size_t index) -> size_t {
+                size_t written = 0;
+                while (written < maxLen) {
+                    if (stream->pos >= stream->pending.length()) {
+                        // Everything generated so far is sent, generate the next part
+                        stream->pending = "";
+                        stream->pos = 0;
+                        if (!WifiServer::nextIndexChunk(*stream)) break;
+                        continue;
+                    }
+                    const size_t len = min(maxLen - written, stream->pending.length() - stream->pos);
+                    memcpy(buffer + written, stream->pending.c_str() + stream->pos, len);
+                    written += len;
+                    stream->pos += len;
+                }
+                // Returning 0 ends the response
+                return written;
+            });
+        request->send(response);
     });
 
-    m_server.on("/delete", HTTP_GET, [](AsyncWebServerRequest* request) {
-        size_t params = request->params();
-
-        Serial.printf("%d params sent in\n", params);
-        for (size_t i = 0; i < params; i++) {
-            const AsyncWebParameter* p = request->getParam(i);
-            Serial.printf("_GET[%s]: %s", p->name().c_str(), p->value().c_str());
-        }
-        String logid = "[]";
-        if (request->hasParam("id")) {
-            logid = request->getParam("id")->value();
-            Storage::deleteLine(Measurements::MEASUREMENTS_LOG, logid.toInt() + 1);
+    // Deleting is POST only (sent by the index page after a confirmation)
+    m_server.on("/delete", HTTP_POST, [](AsyncWebServerRequest* request) {
+        if (!request->hasParam("id", true)) {
+            request->send(400, "text/plain", "Missing record id");
+            return;
         }
 
-        String redirect =
-            "<html>"
-            "<head>"
-            "<meta http-equiv=\"refresh\" content=\"2;url=/\" />"
-            "</head>"
-            "<body>"
-            "Record " +
-            logid +
-            " deleted..."
-            "</body>"
-            "</html>";
+        const String logid = request->getParam("id", true)->value();
+        const long id = logid.toInt();
+        if (id < 0 || (id == 0 && logid != "0")) {
+            request->send(400, "text/plain", "Invalid record id");
+            return;
+        }
 
-        request->send_P(200, "text/html", redirect.c_str(), NULL);
+        // Line 0 is the table heading
+        if (Storage::deleteLine(Measurements::MEASUREMENTS_LOG, id + 1)) {
+            request->send(200, "text/plain", "Record " + logid + " deleted");
+        } else {
+            request->send(500, "text/plain", "Failed to delete record " + logid);
+        }
     });
 
-    m_server.on("/deletelog", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Storage::remove(Measurements::MEASUREMENTS_LOG);
-
-        String redirect =
-            "<html>"
-            "<head>"
-            "<meta http-equiv=\"refresh\" content=\"2;url=/\" />"
-            "</head>"
-            "<body>"
-            "Log file deleted..."
-            "</body>"
-            "</html>";
-
-        request->send_P(200, "text/html", redirect.c_str(), NULL);
+    m_server.on("/deletelog", HTTP_POST, [](AsyncWebServerRequest* request) {
+        if (Storage::remove(Measurements::MEASUREMENTS_LOG)) {
+            request->send(200, "text/plain", "Log file deleted");
+        } else {
+            request->send(500, "text/plain", "Failed to delete the log file");
+        }
     });
 
     m_server.serveStatic("/download", LittleFS, Measurements::MEASUREMENTS_LOG.c_str());
@@ -199,41 +243,62 @@ String WifiServer::getIP() {
 
 void WifiServer::loop() {}
 
-String WifiServer::table(const String& var) {
-    if (var == "TABLEPLACEHOLDER") {
-        String table = "<table>";
-        size_t i = 0;
-        while (true) {
-            String line = Storage::readLine(Measurements::MEASUREMENTS_LOG);
+bool WifiServer::nextIndexChunk(IndexStream& stream) {
+    const int placeholder = m_index.indexOf(TABLE_PLACEHOLDER);
 
-            if (line.isEmpty()) break;
+    switch (stream.stage) {
+        case IndexStream::HEAD:
+            // Page up to the table
+            stream.pending = m_index.substring(0, placeholder) + "<table>\n";
+            stream.file = LittleFS.open(Measurements::MEASUREMENTS_LOG);
+            if (stream.file && stream.file.isDirectory()) stream.file.close();
+            stream.stage = IndexStream::ROWS;
+            return true;
 
-            if (line.startsWith("1")) {
-                // Regeneration on
-                line.replace("\t", "</td><td>");
-                table += "<tr style=\"background-color:#CCCC00\"><td>" + String(i) + "</td><td>" + line +
-                         "</td><td><a href=\"delete?id=" + i + "\">delete</a></td></tr>\n";
-                i++;
-            } else if (line.startsWith("0")) {
-                // Regeneration off
-                line.replace("\t", "</td><td>");
-                table += "<tr style=\"background-color:#66CC00\"><td>" + String(i) + "</td><td>" + line +
-                         "</td><td><a href=\"delete?id=" + i + "\">delete</a></td></tr>\n";
-                i++;
-            } else if (table.length() == strlen("<table>")) {
-                // Header line
-                line.replace("\t", "</th><th>");
-                table += "<tr><th>#</th><th>" + line + "</th><th></th></tr>\n";
-            } else {
-                // Other line
-                line.replace("\t", "</td><td>");
-                table += "<tr><td></td><td>" + line + "</td><td></td></tr>\n";
+        case IndexStream::ROWS:
+            // One table row per log line
+            if (stream.file && stream.file.available()) {
+                String line = stream.file.readStringUntil('\n');
+                if (line.endsWith("\r")) line.remove(line.length() - 1);
+                if (!line.isEmpty()) stream.pending = tableRow(line, stream);
+                return true;
             }
-        }
-        table += "</table>";
-        return table;
+            if (stream.file) stream.file.close();
+            stream.pending = "</table>\n";
+            stream.stage = IndexStream::TAIL;
+            return true;
+
+        case IndexStream::TAIL:
+            // Rest of the page after the table
+            stream.pending = m_index.substring(placeholder + strlen(TABLE_PLACEHOLDER));
+            stream.stage = IndexStream::DONE;
+            return true;
+
+        default:
+            return false;
     }
-    return String();
+}
+
+String WifiServer::tableRow(String line, IndexStream& stream) {
+    if (line.startsWith("1") || line.startsWith("0")) {
+        // Regeneration on (yellow) / off (green)
+        const char* color = line.startsWith("1") ? "#CCCC00" : "#66CC00";
+        const String id(stream.row++);
+        line.replace("\t", "</td><td>");
+        return "<tr style=\"background-color:" + String(color) + "\"><td>" + id + "</td><td>" + line +
+               "</td><td><a href=\"#\" onclick=\"return del(" + id + ")\">delete</a></td></tr>\n";
+    }
+
+    if (!stream.header) {
+        // Header line
+        stream.header = true;
+        line.replace("\t", "</th><th>");
+        return "<tr><th>#</th><th>" + line + "</th><th></th></tr>\n";
+    }
+
+    // Other line
+    line.replace("\t", "</td><td>");
+    return "<tr><td></td><td>" + line + "</td><td></td></tr>\n";
 }
 
 void WifiServer::wifiEvent(WiFiEvent_t event) {
@@ -264,6 +329,7 @@ bool WifiClient::init(const String& ssid, const String& password) {
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {  // 10s max
         delay(500);
         Serial.print(".");
+        esp_task_wdt_reset();  // Keep the loop watchdog fed while waiting
         attempts++;
     }
     Serial.println("\nWiFi client init end");

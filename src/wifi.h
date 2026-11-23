@@ -5,6 +5,8 @@
 
 // https://randomnerdtutorials.com/esp32-async-web-server-espasyncwebserver-library/
 
+struct IndexStream;
+
 class WifiServer {
    public:
     WifiServer();
@@ -15,11 +17,14 @@ class WifiServer {
     static String getIP();
     static void loop();
 
-    static String table(const String& var);
-
     static void wifiEvent(WiFiEvent_t event);
 
    protected:
+    // Streams the index page with the log table in chunks, so the page size is not
+    // limited by the available RAM or by the Arduino String capacity (64 KB).
+    static bool nextIndexChunk(IndexStream& stream);
+    static String tableRow(String line, IndexStream& stream);
+
     static bool m_up;
     static bool m_connected;
     static AsyncWebServer m_server;

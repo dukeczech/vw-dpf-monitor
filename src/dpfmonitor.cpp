@@ -229,6 +229,38 @@ void updateWifiStatus() {
     }
 }
 
+// Show the MQTT upload result: a full-screen message for a few seconds and
+// a green (sent) or red (failed) dot next to the Wi-Fi icon until the next upload
+void showUploadResult(const bool ok, const String& detail) {
+    // Don't repeat the same result on every Wi-Fi retry
+    static int8_t lastResult = -1;
+    if (lastResult == (ok ? 1 : 0)) return;
+    lastResult = ok ? 1 : 0;
+
+    Serial.printf("MQTT upload %s: %s\n", ok ? "OK" : "failed", detail.c_str());
+
+    wifiIcon.setUploadStatus(ok ? WifiIcon::UPLOAD_OK : WifiIcon::UPLOAD_FAILED);
+    Display::lock();
+    updateWifiStatus();
+    Display::unlock();
+
+    // The message is cleared by the next measurement, which does not run on the AP mode page
+    if (Display::getPage() != Display::MAIN) return;
+
+    if (ok) {
+        Display::message(sb.getHeight(), "Data sent", detail, RGB565(0x00, 0xE0, 0x00));
+        //Sound::beep1short();
+    } else {
+        Display::message(sb.getHeight(), "Upload failed", detail, RGB565(0xFF, 0x40, 0x40));
+        //Sound::beep3short();
+    }
+
+    // Keep the message on the screen for 8 s, the same as the regeneration end
+    state = MessageShown;
+    measureAction.reset(1000, false);
+    Display::setDirty();
+}
+
 void idle() {
     Display::lock();
 
@@ -298,7 +330,7 @@ void loop() {
     FileManager::loop();
 #endif
 
-    if (state != RegenerationEnd) {
+    if (state != RegenerationEnd && state != MessageShown) {
         state = Idle;
     }
 
@@ -310,13 +342,16 @@ void loop() {
                 if (!wificfg.ssid.isEmpty() && WifiClient::isWifiAvailable(wificfg.ssid)) {
                     WifiClient::init(wificfg.ssid, wificfg.password);
 
-                    if (WifiClient::isConnected()) {
+                    if (!WifiClient::isConnected()) {
+                        showUploadResult(false, "Wi-Fi");
+                    } else {
                         wifiConnectedOnce = true;
                         wifiStartTime = millis();  // Start a timer
 
                         Serial.println(F("Wi-Fi connected, sending MQTT data"));
                         if(!MQTTClient::connect()) {
                             Serial.println(F("MQTT server unavailable"));
+                            showUploadResult(false, "MQTT broker");
                             break;
                         }
 
@@ -325,6 +360,12 @@ void loop() {
 
                         // Discovery + last values + whole log file, confirmed by the broker
                         const bool sent = MQTTClient::sendLogFile(Measurements::MEASUREMENTS_LOG);
+                        if (sent) {
+                            const uint32_t lines = Storage::countLines(Measurements::MEASUREMENTS_LOG);
+                            showUploadResult(true, String(lines > 0 ? lines - 1 : 0) + " rows");
+                        } else {
+                            showUploadResult(false, "Not confirmed");
+                        }
                         if (sent) {
                             // Data delivered, go straight to AP
                             MQTTClient::disconnect();
@@ -384,7 +425,7 @@ void loop() {
     // Iterate over measurements map every 5s
     if (measureAction()) {
         bool measureOK = true;
-        if (state == RegenerationEnd) {
+        if (state == RegenerationEnd || state == MessageShown) {
             measureAction.reset(5000, false);
             // Clear the display
             Display::clear();
@@ -423,6 +464,14 @@ void loop() {
                 // Finish a regeneration record interrupted by a reset
                 Regeneration::recover();
             }
+
+            // Soot mass gained per km since the start values
+            Measurements::updateSootRate();
+            const double sootRate = Measurements::getValue(Measurements::getActual(), SOOT_RATE);
+            if (isnan(sootRate))
+                Serial.println(F("Soot rate: undefined"));
+            else
+                Serial.printf("Soot rate: %.3f g/km\n", sootRate);
         }
 
         //  Display the measurement data
@@ -466,12 +515,12 @@ void loop() {
             const String& str = String(Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED), 2);
             if (cc2.getValue() != NULL) ((TextLabel*)cc2.getValue())->setText(str);
 
-            const double val = Measurements::diff(SOOT_MASS_CALCULATED);
-            if (val >= 0.0) {
-                if (cc5.getValue() != NULL) ((TextLabel*)cc5.getValue())->setText("(+" + String(val, 2));
-            } else {
-                if (cc5.getValue() != NULL) ((TextLabel*)cc5.getValue())->setText("(" + String(val, 2));
-            }
+            // Soot rate over the last driven kilometres shown as km driven per 1 g of soot,
+            // undefined at the beginning; ">999" when the soot does not grow (e.g. passive regeneration)
+            const double rate = Measurements::getValue(Measurements::getActual(), SOOT_RATE);
+            String text = "---";
+            if (!isnan(rate)) text = (rate <= 0.001) ? "---" : String(1.0 / rate, 1);
+            if (cc5.getValue() != NULL) ((TextLabel*)cc5.getValue())->setText("(" + text);
         }
         if (Measurements::isEnabled(Measurements::getActual(), DISTANCE_SINCE_LAST_REGENERATION)) {
             const String& str = String(Measurements::getValue(Measurements::getActual(), DISTANCE_SINCE_LAST_REGENERATION), 1);

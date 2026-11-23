@@ -624,7 +624,25 @@ FireIcon& FireIcon::disable() {
 }
 
 WifiIcon::WifiIcon(Arduino_GFX& gfx) : Icon(gfx, wifi_icon) {
+    m_upload = UPLOAD_NONE;
     disable();
+}
+
+WifiIcon& WifiIcon::setUploadStatus(const eUploadStatus status) {
+    m_upload = status;
+    return *this;
+}
+
+void WifiIcon::display(const uint16_t color) {
+    Icon::display(color);
+
+    // Upload status dot at the bottom right corner of the icon: green = sent, red = failed
+    uint16_t dot = BACKGROUND_COLOR;
+    if (m_upload == UPLOAD_OK)
+        dot = RGB565(0x00, 0xE0, 0x00);
+    else if (m_upload == UPLOAD_FAILED)
+        dot = RGB565(0xFF, 0x20, 0x20);
+    m_gfx.fillCircle(m_x + m_image.width - 2, m_y + m_image.height - 4, 3, dot);
 }
 
 WifiIcon& WifiIcon::enable(const bool apmode) {

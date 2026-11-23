@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <float.h>
 
+#include <deque>
+
 #include "config.h"
 #include "gui/display.h"
 #include "gui/sound.h"
@@ -36,6 +38,50 @@ void Measurements::init() {
     m_actual.insert({DIFFERENTIAL_PRESSURE, (measurement_t){11, "Differential pressure", "Diff. press", 0x2214F5, 2, "hPa", 0.0, 0, 0.0, 250.0, NULL, 1.0, 0, NULL, true, false, NULL}});
     m_actual.insert({DISTANCE_DRIVEN, (measurement_t){12, "Distance driven", "Distance", 0x2216A9, 4, "km", 0.0, 0, 0.0, 400000.0, NULL, 1.0, 0, NULL, true, false, NULL}});
     m_actual.insert({LOW_PRESSURE_EGR_CLOSING, (measurement_t){13, "Low press. EGR closing", "EGR", 0x2217F4, 2, "%", 0.0, 0, -100.0, 100.0, &calculateEGRClosing, 1 / 81.92, 0, NULL, true, false, NULL}});
+    // Calculated by updateSootRate(), not read from the car (disabled like the soot load)
+    m_actual.insert({SOOT_RATE, (measurement_t){14, "Soot rate", "Soot rate", 0, 0, "g/km", NAN, 3, -1.0, 1.0, NULL, 1.0, 0, NULL, false, false, NULL}});
+}
+
+// The soot rate is calculated over a sliding window of the last driven kilometres, so it follows
+// the current driving (town / highway) instead of averaging the whole trip.
+static const double SOOT_RATE_WINDOW = 10.0;       // km, length of the sliding window
+static const double SOOT_RATE_MIN_DISTANCE = 5.0;  // km, below it the 0.01 g soot resolution makes the rate meaningless
+static const double SOOT_RATE_STEP = 0.5;          // km between the stored samples
+
+struct SootSample {
+    double km;    // distance since the last regeneration
+    double soot;  // soot mass calculated
+};
+static std::deque<SootSample> s_sootSamples;
+
+void Measurements::updateSootRate() {
+    double& rate = getValue(m_actual, SOOT_RATE);
+    rate = NAN;
+
+    // Soot is burnt during a regeneration, start a new window after it
+    if (Regeneration::isRegenerating()) {
+        s_sootSamples.clear();
+        return;
+    }
+
+    // Distance since the last regeneration has 0.1 km resolution, the odometer only 1 km
+    const double km = getValue(m_actual, DISTANCE_SINCE_LAST_REGENERATION);
+    const double soot = getValue(m_actual, SOOT_MASS_CALCULATED);
+
+    // The distance counter was reset (regeneration), start a new window
+    if (!s_sootSamples.empty() && km < s_sootSamples.back().km) s_sootSamples.clear();
+
+    // Store a sample every SOOT_RATE_STEP km
+    if (s_sootSamples.empty() || km - s_sootSamples.back().km >= SOOT_RATE_STEP) s_sootSamples.push_back({km, soot});
+
+    // Drop the samples older than the window, keep the newest one at or beyond its start
+    while (s_sootSamples.size() >= 2 && s_sootSamples[1].km <= km - SOOT_RATE_WINDOW) s_sootSamples.pop_front();
+
+    const SootSample& oldest = s_sootSamples.front();
+    const double distance = km - oldest.km;
+    if (distance < SOOT_RATE_MIN_DISTANCE) return;
+
+    rate = (soot - oldest.soot) / distance;
 }
 
 std::map<parameter_id, measurement_t>& Measurements::getActual() {
@@ -229,6 +275,33 @@ bool Regeneration::check() {
     }
 
     return stateChanged;
+}
+
+// Estimated distance to the next regeneration in km, or a negative value if unknown.
+// The ECU starts a regeneration when the calculated soot mass reaches ~24 g and a regeneration
+// burns it down to ~6 g (observed on 100 regenerations). The soot build-up rate depends on the
+// driving style, so it is measured in the current cycle: soot gained / distance since the last
+// regeneration. At the beginning of a cycle that ratio is noisy, so it starts from a typical
+// rate and the measured one takes over as the distance grows.
+double Regeneration::remainingDistance() {
+    static const double SOOT_REGEN_START = 24.0;      // g
+    static const double SOOT_AFTER_REGEN = 6.0;       // g
+    static const double TYPICAL_RATE = 5.7 / 100.0;   // g/km
+    static const double TYPICAL_RATE_WEIGHT = 50.0;   // km, how much the typical rate counts
+
+    if (!Measurements::isEnabled(Measurements::getActual(), SOOT_MASS_CALCULATED) ||
+        !Measurements::isEnabled(Measurements::getActual(), DISTANCE_SINCE_LAST_REGENERATION)) {
+        return -1.0;
+    }
+
+    const double soot = Measurements::getValue(Measurements::getActual(), SOOT_MASS_CALCULATED);
+    const double distance = max(0.0, Measurements::getValue(Measurements::getActual(), DISTANCE_SINCE_LAST_REGENERATION));
+    const double gained = max(0.0, soot - SOOT_AFTER_REGEN);
+
+    // g/km, always > 0 thanks to the typical rate part
+    const double rate = (gained + TYPICAL_RATE * TYPICAL_RATE_WEIGHT) / (distance + TYPICAL_RATE_WEIGHT);
+
+    return max(0.0, (SOOT_REGEN_START - soot) / rate);
 }
 
 void Regeneration::recover() {

@@ -56,4 +56,5 @@ class Display {
     static void summary();
 
     static void regenerationEnd(const uint16_t topy, const double& time);
+    static void message(const uint16_t topy, const String& text, const String& value, const uint16_t color);
 };

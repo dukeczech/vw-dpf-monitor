@@ -23,7 +23,8 @@ enum parameter_id {
     POST_INJECTION_3,
     DIFFERENTIAL_PRESSURE,
     DISTANCE_DRIVEN,
-    LOW_PRESSURE_EGR_CLOSING
+    LOW_PRESSURE_EGR_CLOSING,
+    SOOT_RATE  // Calculated: soot mass gained per km, NAN until enough distance is driven
 };
 
 struct measurement_t {
@@ -75,6 +76,7 @@ class Measurements {
 
     static bool measure(measurement_t& measurement, const bool randomData = false);
     static float diff(const parameter_id id);
+    static void updateSootRate();
 
     static void enableLog();
     static void disableLog();
@@ -95,6 +97,7 @@ class Regeneration {
     static bool isRegenerating();
     static bool check();
     static void recover();
+    static double remainingDistance();
 
     static void onRegenerationStart();
     static void onRegenerationEnd();

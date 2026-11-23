@@ -325,8 +325,22 @@ class FireIcon : public Icon {
 
 class WifiIcon : public Icon {
    public:
+    // Result of the MQTT upload, shown as a dot next to the icon
+    enum eUploadStatus {
+        UPLOAD_NONE,
+        UPLOAD_OK,
+        UPLOAD_FAILED
+    };
+
     WifiIcon(Arduino_GFX& gfx);
 
     WifiIcon& enable(const bool apmode = true);
     WifiIcon& disable();
+    WifiIcon& setUploadStatus(const eUploadStatus status);
+
+    using Icon::display;
+    virtual void display(const uint16_t color) override;
+
+   protected:
+    eUploadStatus m_upload;
 };

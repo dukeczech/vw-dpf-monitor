@@ -63,7 +63,8 @@ enum eRunningState {
     Init,
     Measuring,
     Idle,
-    RegenerationEnd
+    RegenerationEnd,
+    MessageShown  // A full-screen message is shown until the next measurement
 };
 
 struct WifiConfig {

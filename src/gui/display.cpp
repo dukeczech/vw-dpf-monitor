@@ -120,7 +120,8 @@ void Display::setup() {
     cc4.setSize(cc1.getWidth(), 25).setPosition(0, ycelltop).setBorder(0);
 
     cc5.setSize(cc2.getWidth(), 25).setPosition(cc2.getX(), ycelltop).setBorder(0);
-    cc5.setValue(new TextLabel("(+0.00", "g)", 2)).getValue()->setPadding(-5, 0).setColor(0xdedb);
+    // Soot rate over the last driven kilometres (info only)
+    cc5.setValue(new TextLabel("(---", "km/g)", 2)).getValue()->setPadding(-5, 0).setColor(0xdedb);
 
     cc6.setSize(cc3a.getWidth(), 25).setPosition(cc3a.getX(), ycelltop).setBorder(0);
     cc6.setValue(new TextLabel("(+0.0", "km)", 2)).getValue()->setPadding(-5, 0).setColor(0xafe6);
@@ -230,6 +231,18 @@ void Display::regenerationEnd(const uint16_t topy, const double& time) {
     lbl.setSize(gfx.width(), gfx.height() - topy).setPosition(0, topy);
     lbl.setLabel(new TextLabel("Regeneration end", 6)).getLabel()->setColor(0xafe6);
     lbl.setValue(new TextLabel(String(time, 1), " min", 6)).getValue()->setPadding(15, 0).setColor(0xafe6);
+    lbl.enable().display(true);
+
+    Display::unlock();
+}
+
+void Display::message(const uint16_t topy, const String& text, const String& value, const uint16_t color) {
+    Display::lock();
+
+    Cell lbl(gfx);
+    lbl.setSize(gfx.width(), gfx.height() - topy).setPosition(0, topy);
+    lbl.setLabel(new TextLabel(text, 6)).getLabel()->setColor(color);
+    lbl.setValue(new TextLabel(value, 6)).getValue()->setPadding(15, 0).setColor(color);
     lbl.enable().display(true);
 
     Display::unlock();
